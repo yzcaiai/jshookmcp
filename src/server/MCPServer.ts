@@ -188,6 +188,7 @@ export class MCPServer implements MCPServerContext {
   public readonly router: ToolExecutionRouter;
   public readonly contextGuard: ToolCallContextGuard;
   public readonly circuitBreaker = new ToolCircuitBreaker();
+  private readonly circuitBrokenTools = new Set<string>();
   private readonly searchQualityTracker = new SearchQualityTracker();
   /** Offloads large response data (>512KB) to disk / DetailedDataManager to keep context lean. */
   public readonly largeDataOffloader: LargeDataOffloader;
@@ -460,6 +461,15 @@ export class MCPServer implements MCPServerContext {
     if (MCP_LOG_FILE_DIR) {
       this.mcpLog.enableFileLogging(MCP_LOG_FILE_DIR);
     }
+
+    // Circuit breaker: deactivate blocked tools so the model won't attempt them
+    this.circuitBreaker.onChange((event, toolName) => {
+      if (event === 'opened') {
+        this.circuitBreakerDeactivate(toolName);
+      } else {
+        this.circuitBreakerReactivate(toolName);
+      }
+    });
 
     // Forward structured logs to the MCP client (only after initialize handshake)
     this.server.server.oninitialized = () => {
@@ -764,6 +774,60 @@ export class MCPServer implements MCPServerContext {
     logger.warn(`Entering degraded mode: ${reason}`);
     this.tokenBudget.setTrackingEnabled(false);
     logger.setLevel('warn');
+  }
+
+  private circuitBreakerDeactivate(toolName: string): void {
+    if (this.circuitBrokenTools.has(toolName)) return;
+
+    const registeredTool = this.activatedRegisteredTools.get(toolName);
+    if (registeredTool) {
+      try {
+        registeredTool.remove();
+      } catch (e) {
+        logger.warn(`CircuitBreaker: failed to remove tool "${toolName}":`, e);
+        return;
+      }
+    } else if (!this.activatedToolNames.has(toolName)) {
+      return;
+    }
+
+    this.router.removeHandler(toolName);
+    this.activatedToolNames.delete(toolName);
+    this.activatedRegisteredTools.delete(toolName);
+    this.circuitBrokenTools.add(toolName);
+
+    const extRecord = this.extensionToolsByName.get(toolName);
+    if (extRecord) {
+      extRecord.registeredTool = undefined;
+    }
+
+    if (this.clientSupportsListChanged) {
+      void this.server.sendToolListChanged();
+    }
+
+    logger.info(`CircuitBreaker: deactivated "${toolName}" from tool list`);
+  }
+
+  private circuitBreakerReactivate(toolName: string): void {
+    if (!this.circuitBrokenTools.has(toolName)) return;
+    this.circuitBrokenTools.delete(toolName);
+
+    // Look up tool definition from selected tools (base tier) or registry
+    const toolDef = this.selectedTools.find((t) => t.name === toolName);
+    if (!toolDef) {
+      logger.warn(`CircuitBreaker: cannot reactivate "${toolName}" — no tool definition found`);
+      return;
+    }
+
+    const registration = this.registerSingleTool(toolDef);
+    this.activatedRegisteredTools.set(toolName, registration);
+    this.activatedToolNames.add(toolName);
+
+    if (this.clientSupportsListChanged) {
+      void this.server.sendToolListChanged();
+    }
+
+    logger.info(`CircuitBreaker: reactivated "${toolName}" in tool list`);
   }
 
   async start(): Promise<void> {

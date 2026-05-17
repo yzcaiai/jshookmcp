@@ -7,6 +7,8 @@ export interface CircuitBreakerState {
   state: 'closed' | 'open' | 'half-open';
 }
 
+export type CircuitBreakerEventHandler = (event: 'opened' | 'recovered', toolName: string) => void;
+
 const FAILURE_THRESHOLD = 3;
 const RECOVERY_MS = 30_000;
 const HALF_OPEN_MAX_CALLS = 1;
@@ -14,6 +16,21 @@ const HALF_OPEN_MAX_CALLS = 1;
 export class ToolCircuitBreaker {
   private readonly states = new Map<string, CircuitBreakerState>();
   private readonly halfOpenCalls = new Map<string, number>();
+  private readonly listeners = new Set<CircuitBreakerEventHandler>();
+
+  onChange(handler: CircuitBreakerEventHandler): void {
+    this.listeners.add(handler);
+  }
+
+  private emit(event: 'opened' | 'recovered', toolName: string): void {
+    for (const handler of this.listeners) {
+      try {
+        handler(event, toolName);
+      } catch {
+        // listener errors must not break the breaker
+      }
+    }
+  }
 
   getState(toolName: string): CircuitBreakerState | undefined {
     return this.states.get(toolName);
@@ -55,6 +72,7 @@ export class ToolCircuitBreaker {
       entry.failureCount = 0;
       this.halfOpenCalls.delete(toolName);
       logger.info(`[CircuitBreaker] ${toolName}: half-open → closed`);
+      this.emit('recovered', toolName);
       return;
     }
 
@@ -80,6 +98,7 @@ export class ToolCircuitBreaker {
       entry.state = 'open';
       this.halfOpenCalls.delete(toolName);
       logger.warn(`[CircuitBreaker] ${toolName}: half-open → open (probe failed)`);
+      this.emit('opened', toolName);
       return;
     }
 
@@ -88,6 +107,7 @@ export class ToolCircuitBreaker {
       logger.warn(
         `[CircuitBreaker] ${toolName}: closed → open (${entry.failureCount} consecutive failures)`,
       );
+      this.emit('opened', toolName);
     }
   }
 
