@@ -2,8 +2,8 @@ import type { CodeCollector } from '@modules/collector/CodeCollector';
 import { logger } from '@utils/logger';
 import { PAGE_FRAME_SELECTOR_TIMEOUT_MS, PAGE_NETWORK_IDLE_TIMEOUT_MS } from '@src/constants';
 import { setTimeout as asyncSetTimeout } from 'node:timers/promises';
-import type { Page, Frame } from 'rebrowser-puppeteer-core';
-import type { BrowserTargetInfo } from '@modules/browser/BrowserTargetSessionManager';
+import type { Page, Frame, NewDocumentScriptEvaluation } from 'rebrowser-puppeteer-core';
+import type { BrowserTargetInfo } from '@modules/browser/BrowserTargetSessionManager.shared';
 import {
   toChromeCompatibleWaitUntil,
   type PageNavigationWaitUntil,
@@ -70,6 +70,11 @@ interface UploadContextLike {
 }
 
 export class PageController {
+  private pagePersistentScripts = new WeakMap<
+    Page,
+    Map<string, { source: string; identifier: string }>
+  >();
+
   constructor(private collector: CodeCollector) {}
 
   private getChromeNavigationWaitUntil(
@@ -101,6 +106,61 @@ export class PageController {
     return await this.collector
       .getBrowserTargetSessionManager()
       .addScriptToEvaluateOnNewDocument(source);
+  }
+
+  async addPersistentScriptToManagedTargets(
+    source: string,
+    options?: { id?: string; targetTypes?: string[]; evaluateNow?: boolean },
+  ): Promise<{ identifier: string; appliedTargets: number }> {
+    return await this.collector
+      .getBrowserTargetSessionManager()
+      .registerPersistentScript(source, options);
+  }
+
+  async addScriptToPageEvaluateOnNewDocument(
+    source: string,
+    options?: { id?: string },
+  ): Promise<NewDocumentScriptEvaluation | { identifier: string; reused: true }> {
+    const page = await this.collector.getActivePage();
+    if (!options?.id) {
+      return (await evaluateOnNewDocumentWithTimeout(page, source)) as NewDocumentScriptEvaluation;
+    }
+
+    const registry = this.getPagePersistentScriptRegistry(page);
+    const existing = registry.get(options.id);
+    if (existing?.source === source) {
+      return {
+        identifier: existing.identifier,
+        reused: true,
+      };
+    }
+
+    if (existing?.identifier) {
+      await page.removeScriptToEvaluateOnNewDocument(existing.identifier).catch(() => {
+        // Ignore stale identifier races; replacement registration below is the source of truth.
+      });
+    }
+
+    const registration = (await evaluateOnNewDocumentWithTimeout(
+      page,
+      source,
+    )) as NewDocumentScriptEvaluation;
+    registry.set(options.id, {
+      source,
+      identifier: registration.identifier,
+    });
+    return registration;
+  }
+
+  private getPagePersistentScriptRegistry(
+    page: Page,
+  ): Map<string, { source: string; identifier: string }> {
+    let registry = this.pagePersistentScripts.get(page);
+    if (!registry) {
+      registry = new Map<string, { source: string; identifier: string }>();
+      this.pagePersistentScripts.set(page, registry);
+    }
+    return registry;
   }
 
   async navigate(

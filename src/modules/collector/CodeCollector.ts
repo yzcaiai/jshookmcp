@@ -13,7 +13,7 @@ import { CodeCache } from '@modules/collector/CodeCache';
 import { SmartCodeCollector } from '@modules/collector/SmartCodeCollector';
 import { CodeCompressor } from '@modules/collector/CodeCompressor';
 import { BrowserTargetSessionManager } from '@modules/browser/BrowserTargetSessionManager';
-import type { BrowserTargetInfo } from '@modules/browser/BrowserTargetSessionManager';
+import type { BrowserTargetInfo } from '@modules/browser/BrowserTargetSessionManager.shared';
 import type { CDPSessionLike } from '@modules/browser/CDPSessionLike';
 import { findBrowserExecutableAsync } from '@utils/browserExecutable';
 import { collectInnerImpl } from '@modules/collector/CodeCollectorCollectInternal';

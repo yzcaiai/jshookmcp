@@ -25,15 +25,54 @@ class FakeAttachedSession {
   detach = vi.fn(async () => {});
 }
 
-class FakeParentSession {
-  private readonly attachedSession = new FakeAttachedSession();
-  private readonly connectionState = {
-    session: vi.fn((sessionId: string) =>
-      sessionId === 'session-1' ? this.attachedSession : null,
-    ),
-  };
+class FakeManagedSession {
+  constructor(private readonly sessionId: string) {}
 
   send = vi.fn(async (method: string) => {
+    if (method === 'Page.addScriptToEvaluateOnNewDocument') {
+      return { identifier: 'script-2' };
+    }
+    return {};
+  });
+
+  on() {
+    return this;
+  }
+
+  off() {
+    return this;
+  }
+
+  id = vi.fn(() => this.sessionId);
+  detach = vi.fn(async () => {});
+}
+
+class FakeParentSession {
+  private readonly attachedSession = new FakeAttachedSession();
+  readonly childSession = new FakeManagedSession('session-2');
+  readonly pageSession = new FakeManagedSession('session-page');
+  private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
+  private childSessionMisses = 0;
+  private readonly connectionState = {
+    session: vi.fn((sessionId: string) => {
+      if (sessionId === 'session-1') {
+        return this.attachedSession;
+      }
+      if (sessionId === 'session-page') {
+        return this.pageSession;
+      }
+      if (sessionId === 'session-2') {
+        if (this.childSessionMisses > 0) {
+          this.childSessionMisses -= 1;
+          return null;
+        }
+        return this.childSession;
+      }
+      return null;
+    }),
+  };
+
+  send = vi.fn(async (method: string, params?: Record<string, unknown>) => {
     if (method === 'Target.getTargets') {
       return {
         targetInfos: [
@@ -56,23 +95,40 @@ class FakeParentSession {
     }
 
     if (method === 'Target.attachToTarget') {
+      if (params?.targetId === 'page-1') {
+        return { sessionId: 'session-page' };
+      }
       return { sessionId: 'session-1' };
     }
 
     return {};
   });
 
-  on() {
+  on(event: string, handler: (payload: unknown) => void) {
+    const handlers = this.listeners.get(event) ?? new Set<(payload: unknown) => void>();
+    handlers.add(handler);
+    this.listeners.set(event, handlers);
     return this;
   }
 
-  off() {
+  off(event: string, handler: (payload: unknown) => void) {
+    this.listeners.get(event)?.delete(handler);
     return this;
   }
 
   detach = vi.fn(async () => {});
 
   connection = vi.fn(() => this.connectionState);
+
+  setChildSessionLookupMisses(count: number): void {
+    this.childSessionMisses = count;
+  }
+
+  emit(event: string, payload: unknown): void {
+    for (const handler of this.listeners.get(event) ?? []) {
+      handler(payload);
+    }
+  }
 }
 
 describe('BrowserTargetSessionManager', () => {
@@ -187,5 +243,134 @@ describe('BrowserTargetSessionManager', () => {
       }),
     );
     expect(manager.getAttachedTargetSession()).not.toBeNull();
+  });
+
+  it('replays persistent scripts to newly attached managed targets', async () => {
+    const parentSession = new FakeParentSession();
+    const browser = {
+      target: () => ({
+        createCDPSession: vi.fn(async () => parentSession),
+      }),
+    };
+    const manager = new BrowserTargetSessionManager(() => browser as never);
+
+    await manager.listTargets();
+    await manager.registerPersistentScript('window.__aiHook = true;', {
+      id: 'ai-hook:test',
+      evaluateNow: true,
+      targetTypes: ['iframe'],
+    });
+
+    parentSession.emit('Target.attachedToTarget', {
+      sessionId: 'session-2',
+      targetInfo: {
+        targetId: 'frame-1',
+        type: 'iframe',
+        title: 'Inner',
+        url: withPath(TEST_URLS.root, 'frame'),
+        attached: true,
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(parentSession.childSession.send).toHaveBeenCalledWith(
+        'Page.addScriptToEvaluateOnNewDocument',
+        expect.objectContaining({
+          source: 'window.__aiHook = true;',
+        }),
+      );
+    });
+  });
+
+  it('bootstraps existing page targets before registering persistent scripts', async () => {
+    const parentSession = new FakeParentSession();
+    const browser = {
+      target: () => ({
+        createCDPSession: vi.fn(async () => parentSession),
+      }),
+    };
+    const manager = new BrowserTargetSessionManager(() => browser as never);
+
+    const result = await manager.registerPersistentScript('window.__pageHook = true;', {
+      id: 'page-hook:test',
+      evaluateNow: true,
+      targetTypes: ['page'],
+    });
+
+    expect(result.appliedTargets).toBeGreaterThanOrEqual(1);
+    expect(parentSession.send).toHaveBeenCalledWith('Target.attachToTarget', {
+      targetId: 'page-1',
+      flatten: true,
+    });
+    expect(parentSession.pageSession.send).toHaveBeenCalledWith(
+      'Page.addScriptToEvaluateOnNewDocument',
+      expect.objectContaining({
+        source: 'window.__pageHook = true;',
+      }),
+    );
+  });
+
+  it('retries child session lookup before dropping auto-attached targets', async () => {
+    const parentSession = new FakeParentSession();
+    parentSession.setChildSessionLookupMisses(2);
+    const browser = {
+      target: () => ({
+        createCDPSession: vi.fn(async () => parentSession),
+      }),
+    };
+    const manager = new BrowserTargetSessionManager(() => browser as never);
+
+    await manager.listTargets();
+    await manager.registerPersistentScript('window.__aiHook = true;', {
+      id: 'ai-hook:test-retry',
+      evaluateNow: true,
+      targetTypes: ['iframe'],
+    });
+
+    parentSession.emit('Target.attachedToTarget', {
+      sessionId: 'session-2',
+      targetInfo: {
+        targetId: 'frame-1',
+        type: 'iframe',
+        title: 'Inner',
+        url: withPath(TEST_URLS.root, 'frame'),
+        attached: true,
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(parentSession.childSession.send).toHaveBeenCalledWith(
+        'Page.addScriptToEvaluateOnNewDocument',
+        expect.objectContaining({
+          source: 'window.__aiHook = true;',
+        }),
+      );
+    });
+  });
+
+  it('does not re-register the same persistent script source on managed targets', async () => {
+    const parentSession = new FakeParentSession();
+    const browser = {
+      target: () => ({
+        createCDPSession: vi.fn(async () => parentSession),
+      }),
+    };
+    const manager = new BrowserTargetSessionManager(() => browser as never);
+
+    await manager.registerPersistentScript('window.__aiHook = true;', {
+      id: 'ai-hook:dedupe',
+      evaluateNow: true,
+      targetTypes: ['page'],
+    });
+    await manager.registerPersistentScript('window.__aiHook = true;', {
+      id: 'ai-hook:dedupe',
+      evaluateNow: true,
+      targetTypes: ['page'],
+    });
+
+    const addScriptCalls = parentSession.pageSession.send.mock.calls.filter(
+      ([method]) => method === 'Page.addScriptToEvaluateOnNewDocument',
+    );
+    expect(addScriptCalls).toHaveLength(1);
   });
 });

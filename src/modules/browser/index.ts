@@ -32,3 +32,10 @@ export {
   type BrowserInfo,
   type BrowserSignature,
 } from '@modules/browser/BrowserDiscovery';
+
+export {
+  type BrowserTargetInfo,
+  type ManagedTargetSessionEntry,
+  type PersistentScriptEntry,
+  type TargetFilters,
+} from '@modules/browser/BrowserTargetSessionManager.shared';

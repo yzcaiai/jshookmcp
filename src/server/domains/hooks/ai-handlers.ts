@@ -22,8 +22,15 @@ export class AIHookToolHandlers {
     });
   }
 
-  private async addScriptToAttachedTarget(source: string): Promise<void> {
-    await this.pageController.addScriptToAttachedTarget(source);
+  private async addPersistentScriptToManagedTargets(hookId: string, source: string): Promise<void> {
+    await this.pageController.addScriptToPageEvaluateOnNewDocument(source, {
+      id: `ai-hook:${hookId}`,
+    });
+    await this.pageController.addPersistentScriptToManagedTargets(source, {
+      id: `ai-hook:${hookId}`,
+      evaluateNow: true,
+      targetTypes: ['page', 'iframe'],
+    });
   }
 
   async handleAIHookInject(args: Record<string, unknown>) {
@@ -34,7 +41,7 @@ export class AIHookToolHandlers {
 
       if (this.hasAttachedTargetSession()) {
         if (method === 'evaluateOnNewDocument') {
-          await this.addScriptToAttachedTarget(code);
+          await this.addPersistentScriptToManagedTargets(hookId, code);
           logger.info(`Hook injected into attached target (evaluateOnNewDocument): ${hookId}`);
         } else {
           await this.evaluateInAttachedTarget(code);

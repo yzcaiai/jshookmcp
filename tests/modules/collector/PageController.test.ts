@@ -84,6 +84,11 @@ describe('PageController', () => {
       $: vi.fn().mockResolvedValue(null),
       frames: vi.fn().mockReturnValue([]),
       mainFrame: vi.fn().mockImplementation(() => page),
+      removeScriptToEvaluateOnNewDocument: vi.fn().mockResolvedValue(undefined),
+      createCDPSession: vi.fn().mockResolvedValue({
+        send: vi.fn().mockResolvedValue({ result: { value: 1 } }),
+        detach: vi.fn().mockResolvedValue(undefined),
+      }),
     };
     collector = {
       getActivePage: vi.fn().mockResolvedValue(page),
@@ -227,6 +232,45 @@ describe('PageController', () => {
     await expect(controller.emulateDevice('BlackBerry Classic')).rejects.toThrow(
       'Unsupported device',
     );
+  });
+
+  it('reuses an existing page preload registration when id and source match', async () => {
+    page.evaluate = vi.fn().mockResolvedValue(true);
+    page.evaluateOnNewDocument = vi
+      .fn()
+      .mockResolvedValueOnce({ identifier: 'script-1' })
+      .mockResolvedValueOnce({ identifier: 'script-2' });
+
+    const first = await controller.addScriptToPageEvaluateOnNewDocument('window.__probe = 1;', {
+      id: 'ai-hook:test',
+    });
+    const second = await controller.addScriptToPageEvaluateOnNewDocument('window.__probe = 1;', {
+      id: 'ai-hook:test',
+    });
+
+    expect(first).toEqual({ identifier: 'script-1' });
+    expect(second).toEqual({ identifier: 'script-1', reused: true });
+    expect(page.evaluateOnNewDocument).toHaveBeenCalledTimes(1);
+    expect(page.removeScriptToEvaluateOnNewDocument).not.toHaveBeenCalled();
+  });
+
+  it('replaces an existing page preload registration when id matches but source changes', async () => {
+    page.evaluate = vi.fn().mockResolvedValue(true);
+    page.evaluateOnNewDocument = vi
+      .fn()
+      .mockResolvedValueOnce({ identifier: 'script-1' })
+      .mockResolvedValueOnce({ identifier: 'script-2' });
+
+    await controller.addScriptToPageEvaluateOnNewDocument('window.__probe = 1;', {
+      id: 'ai-hook:test',
+    });
+    const replaced = await controller.addScriptToPageEvaluateOnNewDocument('window.__probe = 2;', {
+      id: 'ai-hook:test',
+    });
+
+    expect(page.removeScriptToEvaluateOnNewDocument).toHaveBeenCalledWith('script-1');
+    expect(page.evaluateOnNewDocument).toHaveBeenCalledTimes(2);
+    expect(replaced).toEqual({ identifier: 'script-2' });
   });
 
   it('uploadFile throws when file input element is missing', async () => {

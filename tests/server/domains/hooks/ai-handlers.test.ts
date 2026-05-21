@@ -21,6 +21,8 @@ describe('AIHookToolHandlers', () => {
     hasAttachedTargetSession: ReturnType<typeof vi.fn>;
     evaluateAttachedTarget: ReturnType<typeof vi.fn>;
     addScriptToAttachedTarget: ReturnType<typeof vi.fn>;
+    addPersistentScriptToManagedTargets: ReturnType<typeof vi.fn>;
+    addScriptToPageEvaluateOnNewDocument: ReturnType<typeof vi.fn>;
   };
   let pageMock: any;
   let handlers: AIHookToolHandlers;
@@ -33,6 +35,13 @@ describe('AIHookToolHandlers', () => {
       hasAttachedTargetSession: vi.fn().mockReturnValue(false),
       evaluateAttachedTarget: vi.fn(),
       addScriptToAttachedTarget: vi.fn(),
+      addPersistentScriptToManagedTargets: vi.fn().mockResolvedValue({
+        identifier: 'ai-hook:test',
+        appliedTargets: 1,
+      }),
+      addScriptToPageEvaluateOnNewDocument: vi
+        .fn()
+        .mockResolvedValue({ identifier: 'page-script' }),
     } as any;
     handlers = new AIHookToolHandlers(pageControllerMock);
   });
@@ -95,6 +104,33 @@ describe('AIHookToolHandlers', () => {
         awaitPromise: true,
       });
       expect(pageControllerMock.getPage).not.toHaveBeenCalled();
+    });
+
+    it('injects evaluateOnNewDocument into both page preload and managed targets when attached', async () => {
+      pageControllerMock.hasAttachedTargetSession.mockReturnValue(true);
+
+      const res = await handlers.handleAIHookInject({
+        hookId: 'target-persistent',
+        code: 'globalThis.__probe = true',
+        method: 'evaluateOnNewDocument',
+      });
+
+      // @ts-expect-error
+      expect(res.content[0].text).toContain('"success": true');
+      expect(pageControllerMock.addScriptToPageEvaluateOnNewDocument).toHaveBeenCalledWith(
+        'globalThis.__probe = true',
+        {
+          id: 'ai-hook:target-persistent',
+        },
+      );
+      expect(pageControllerMock.addPersistentScriptToManagedTargets).toHaveBeenCalledWith(
+        'globalThis.__probe = true',
+        {
+          id: 'ai-hook:target-persistent',
+          evaluateNow: true,
+          targetTypes: ['page', 'iframe'],
+        },
+      );
     });
   });
 
