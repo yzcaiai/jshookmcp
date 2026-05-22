@@ -59,5 +59,13 @@
     "unicorn/require-post-message-target-origin": "off"
   },
   "plugins": ["unicorn", "import", "typescript"],
-  "ignorePatterns": ["dist/**", "node_modules/**"]
+  "ignorePatterns": ["dist/**", "node_modules/**"],
+  "overrides": [
+    {
+      "files": ["tests/**/*.ts"],
+      "rules": {
+        "unicorn/consistent-function-scoping": "off"
+      }
+    }
+  ]
 }
