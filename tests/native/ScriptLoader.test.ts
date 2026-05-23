@@ -51,6 +51,23 @@ describe('ScriptLoader', () => {
     );
   });
 
+  it('ignores the repository root scripts directory when native scripts are available', async () => {
+    state.existsSync.mockImplementation((path: string) => {
+      if (path.endsWith(join('src', 'native', 'scripts'))) {
+        return true;
+      }
+
+      return path.endsWith(join(process.cwd(), 'scripts'));
+    });
+
+    const { ScriptLoader } = await import('@src/native/ScriptLoader');
+    const loader = new ScriptLoader();
+
+    expect(loader.getScriptPath('enum-windows.ps1')).toBe(
+      join(resolve(process.cwd(), 'src', 'native'), 'scripts', 'windows', 'enum-windows.ps1'),
+    );
+  });
+
   it('caches loaded scripts until the cache is cleared', async () => {
     const { ScriptLoader } = await import('@src/native/ScriptLoader');
     const loader = new ScriptLoader();

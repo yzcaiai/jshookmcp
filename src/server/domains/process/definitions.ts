@@ -31,25 +31,31 @@ export const processToolDefinitions: Tool[] = [
 
   tool('memory_read', (t) =>
     t
-      .desc('Read memory from a process at a specific address. Requires elevated privileges.')
-      .number('pid', 'Target process ID')
+      .desc(
+        'Read memory from a process at a specific address. Requires elevated privileges. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Memory address to read (hex string like "0x12345678")')
       .number('size', 'Number of bytes to read')
-      .required('pid', 'address', 'size'),
+      .required('address', 'size'),
   ),
   tool('memory_write', (t) =>
     t
-      .desc('Write data to process memory at a given address.')
-      .number('pid', 'Target process ID')
+      .desc(
+        'Write data to process memory at a given address. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Memory address to write to (hex string like "0x12345678")')
       .string('data', 'Data to write (hex string or base64)')
       .enum('encoding', ['hex', 'base64'], 'Encoding of the data parameter', { default: 'hex' })
-      .required('pid', 'address', 'data'),
+      .required('address', 'data'),
   ),
   tool('memory_scan', (t) =>
     t
-      .desc('Scan process memory for a pattern or value. Requires elevated privileges.')
-      .number('pid', 'Target process ID')
+      .desc(
+        'Scan process memory for a pattern or value. Requires elevated privileges. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('pattern', 'Pattern to search for (hex bytes like "48 8B 05" or value)')
       .enum(
         'patternType',
@@ -62,19 +68,23 @@ export const processToolDefinitions: Tool[] = [
         'Suspend the target process during scan for a consistent memory snapshot (default: false)',
         { default: false },
       )
-      .required('pid', 'pattern'),
+      .required('pattern'),
   ),
   tool('memory_check_protection', (t) =>
     t
-      .desc('Check memory protection flags at a specific address.')
-      .number('pid', 'Target process ID')
+      .desc(
+        'Check memory protection flags at a specific address. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Memory address to check (hex string like "0x12345678")')
-      .required('pid', 'address'),
+      .required('address'),
   ),
   tool('memory_scan_filtered', (t) =>
     t
-      .desc('Refine a previous memory scan with filtered addresses.')
-      .number('pid', 'Target process ID')
+      .desc(
+        'Refine a previous memory scan with filtered addresses. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('pattern', 'Pattern to search for')
       .array(
         'addresses',
@@ -87,12 +97,14 @@ export const processToolDefinitions: Tool[] = [
         'Type of pattern to search',
         { default: 'hex' },
       )
-      .required('pid', 'pattern', 'addresses'),
+      .required('pattern', 'addresses'),
   ),
   tool('memory_batch_write', (t) =>
     t
-      .desc('Write multiple memory patches at once.')
-      .number('pid', 'Target process ID')
+      .desc(
+        'Write multiple memory patches at once. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .array(
         'patches',
         {
@@ -106,22 +118,25 @@ export const processToolDefinitions: Tool[] = [
         },
         'Array of patches to apply',
       )
-      .required('pid', 'patches'),
+      .required('patches'),
   ),
   tool('memory_dump_region', (t) =>
     t
-      .desc('Dump a process memory region to a binary file for offline analysis.')
-      .number('pid', 'Target process ID')
+      .desc(
+        'Dump a process memory region to a binary file for offline analysis. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Start address (hex)')
       .number('size', 'Number of bytes to dump')
       .string('outputPath', 'Output file path')
-      .required('pid', 'address', 'size', 'outputPath'),
+      .required('address', 'size', 'outputPath'),
   ),
   tool('memory_list_regions', (t) =>
     t
-      .desc('List all memory regions in a process with protection flags.')
-      .number('pid', 'Target process ID')
-      .required('pid'),
+      .desc(
+        'List all memory regions in a process with protection flags. If pid is omitted, the active browser renderer PID is auto-discovered from the current browser session.',
+      )
+      .number('pid', 'Target process ID (optional when a browser session is attached)'),
   ),
   tool('memory_audit_export', (t) =>
     t.desc('Export the in-memory audit trail for memory operations as JSON.'),

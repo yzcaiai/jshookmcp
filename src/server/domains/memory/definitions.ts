@@ -34,7 +34,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
   tool('memory_first_scan', (t) =>
     t
       .desc('Start a new memory scan session.')
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('value', 'Value to search for (as string, e.g. "100", "3.14", "48 65 6C 6C 6F")')
       .enum('valueType', [...ScanValueTypeOptions], 'Data type of the value')
       .number(
@@ -51,7 +51,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         },
         description: 'Filter which memory regions to scan',
       })
-      .requiredOpenWorld('pid', 'value', 'valueType'),
+      .requiredOpenWorld('value', 'valueType'),
   ),
   tool('memory_next_scan', (t) =>
     t
@@ -65,7 +65,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
   tool('memory_unknown_scan', (t) =>
     t
       .desc('Start an unknown initial value scan.')
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .enum('valueType', [...ScanValueTypeOptions], 'Data type to capture')
       .number('alignment', 'Alignment in bytes (default: natural for type)')
       .number('maxResults', 'Maximum addresses to capture (default: 5,000,000)')
@@ -77,23 +77,23 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
           moduleOnly: { type: 'boolean' },
         },
       })
-      .requiredOpenWorld('pid', 'valueType'),
+      .requiredOpenWorld('valueType'),
   ),
   tool('memory_pointer_scan', (t) =>
     t
       .desc('Find pointers to a target address.')
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('targetAddress', 'Target address to find pointers to (hex, e.g. "0x7FF612340000")')
       .number('maxResults', 'Maximum results (default: 10,000)')
       .boolean('moduleOnly', 'Only scan module-backed regions')
-      .required('pid', 'targetAddress')
+      .required('targetAddress')
       .query()
       .openWorld(),
   ),
   tool('memory_group_scan', (t) =>
     t
       .desc('Search for multiple values at known offsets simultaneously.')
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .array(
         'pattern',
         {
@@ -113,7 +113,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       )
       .number('alignment', 'Alignment for base address (default: 4)')
       .number('maxResults', 'Maximum results (default: 1,000,000)')
-      .required('pid', 'pattern')
+      .required('pattern')
       .query(),
   ),
   tool('memory_scan_session', (t) =>
@@ -133,7 +133,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         `Pointer chain operations: scan (find chains to target), validate, resolve, or export as JSON.`,
       )
       .enum('action', ['scan', 'validate', 'resolve', 'export'], 'Chain operation')
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('targetAddress', 'Target address hex (action=scan)')
       .number('maxDepth', 'Max chain depth 1-6 (action=scan, default: 4)')
       .number('maxOffset', 'Max offset per level in bytes (action=scan, default: 4096)')
@@ -149,7 +149,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
   tool('memory_structure_analyze', (t) =>
     t
       .desc('Analyze memory at an address to infer data structure layout.')
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Base address of the structure (hex)')
       .number('size', 'Size to analyze in bytes (default: 256)')
       .array(
@@ -158,7 +158,7 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Additional instance addresses for cross-comparison',
       )
       .boolean('parseRtti', 'Whether to attempt RTTI parsing (default: true)')
-      .required('pid', 'address')
+      .required('address')
       .query(),
   ),
   tool('memory_vtable_parse', (t) =>
@@ -167,9 +167,9 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Parse a vtable to enumerate virtual function pointers and resolve them to module+offset. Also attempts ' +
           'RTTI parsing for class name and inheritance hierarchy.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('vtableAddress', 'Address of the vtable (hex)')
-      .required('pid', 'vtableAddress')
+      .required('vtableAddress')
       .query(),
   ),
   tool('memory_structure_export_c', (t) =>
@@ -188,11 +188,11 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Compare two structure instances to identify which fields differ (dynamic values like health/position) vs' +
           ' which are constant (vtable, type flags). Useful for finding important fields.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address1', 'First instance address (hex)')
       .string('address2', 'Second instance address (hex)')
       .number('size', 'Size to compare in bytes (default: 256)')
-      .required('pid', 'address1', 'address2')
+      .required('address1', 'address2')
       .query(),
   ),
 
@@ -203,7 +203,10 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         `Hardware breakpoint via x64 debug registers (DR0-DR3). Actions: set, remove, list, trace.`,
       )
       .enum('action', ['set', 'remove', 'list', 'trace'], 'Breakpoint operation')
-      .number('pid', 'Target process ID (action=set/trace)')
+      .number(
+        'pid',
+        'Target process ID (optional when a browser session is attached; action=set/trace)',
+      )
       .string('address', 'Address hex (action=set/trace)')
       .enum('access', ['read', 'write', 'readwrite', 'execute'], 'Access type (action=set/trace)')
       .number('size', 'Watch size in bytes (action=set, default: 4)')
@@ -220,10 +223,10 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .desc(
         'Write bytes to target process at address. Saves original bytes for undo. Use for runtime code patching.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Address to patch (hex)')
       .array('bytes', { type: 'number' }, 'Byte values to write (e.g. [0x90, 0x90])')
-      .required('pid', 'address', 'bytes')
+      .required('address', 'bytes')
       .destructive()
       .openWorld(),
   ),
@@ -232,10 +235,10 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .desc(
         'NOP out instructions at address (replace with 0x90). Useful for disabling checks or jumps.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Address to NOP (hex)')
       .number('count', 'Number of bytes to NOP')
-      .required('pid', 'address', 'count')
+      .required('address', 'count')
       .destructive(),
   ),
   tool('memory_patch_undo', (t) =>
@@ -250,9 +253,9 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .desc(
         'Find code caves (runs of 0x00 or 0xCC) in executable sections of loaded modules. Returns largest caves first.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .number('minSize', 'Minimum cave size in bytes (default: 16)')
-      .required('pid')
+      .required()
       .query(),
   ),
 
@@ -262,11 +265,11 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .desc(
         'Write a typed value to a memory address. Supports undo/redo via memory_write_history(action=undo|redo).',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Address to write to (hex)')
       .string('value', 'Value to write (as string)')
       .enum('valueType', [...ScanValueTypeOptions], 'Data type of the value')
-      .required('pid', 'address', 'value', 'valueType')
+      .required('address', 'value', 'valueType')
       .destructive(),
   ),
   tool('memory_freeze', (t) =>
@@ -276,7 +279,10 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
           `it.`,
       )
       .enum('action', ['freeze', 'unfreeze'], 'Freeze operation')
-      .number('pid', 'Target process ID (action=freeze)')
+      .number(
+        'pid',
+        'Target process ID (optional when a browser session is attached; action=freeze)',
+      )
       .string('address', 'Address to freeze hex (action=freeze)')
       .string('value', 'Value to maintain (action=freeze)')
       .enum('valueType', [...ScanValueTypeOptions], 'Data type (action=freeze)')
@@ -290,10 +296,10 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
       .desc(
         'Dump memory region as hex with ASCII column. Outputs a formatted hex dump similar to xxd.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('address', 'Start address (hex)')
       .number('size', 'Size to dump in bytes (default: 256)')
-      .required('pid', 'address')
+      .required('address')
       .query(),
   ),
 
@@ -304,9 +310,9 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         `Hook time APIs to scale process time. Actions: apply (hook + set speed), set (adjust speed).`,
       )
       .enum('action', ['apply', 'set'], 'Speedhack action')
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .number('speed', 'Speed multiplier')
-      .required('action', 'pid', 'speed')
+      .required('action', 'speed')
       .destructive(),
   ),
 
@@ -327,9 +333,9 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Enumerate all heaps and heap blocks in a process via Toolhelp32 snapshot. Returns heap list with block ' +
           'counts, sizes, and overall statistics.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .number('maxBlocks', 'Maximum blocks to enumerate per heap (default: 10000)')
-      .required('pid')
+      .required()
       .query(),
   ),
   tool('memory_heap_stats', (t) =>
@@ -338,8 +344,8 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Get detailed heap statistics with size distribution buckets (0-64B, 64B-1KB, 1-64KB, 64KB-1MB, >1MB), ' +
           'fragmentation ratio, and aggregate metrics.',
       )
-      .number('pid', 'Target process ID')
-      .required('pid')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .required()
       .query(),
   ),
   tool('memory_heap_anomalies', (t) =>
@@ -348,8 +354,8 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Detect heap anomalies: heap spray patterns (many same-size blocks), possible use-after-free (non-zero ' +
           'free blocks), and suspicious block sizes (0 or >100MB).',
       )
-      .number('pid', 'Target process ID')
-      .required('pid')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .required()
       .query(),
   ),
 
@@ -360,9 +366,9 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Parse PE headers (DOS, NT, File, Optional) from a module base address in process memory. Returns machine' +
           ' type, entry point, image base, section count, and data directory info.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('moduleBase', 'Module base address (hex, e.g. "0x7ff612340000")')
-      .required('pid', 'moduleBase')
+      .required('moduleBase')
       .query(),
   ),
   tool('memory_pe_imports_exports', (t) =>
@@ -371,10 +377,10 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Parse import and/or export tables from a PE module in process memory. Returns DLL names, function names,' +
           ' ordinals, hints, and forwarded exports.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('moduleBase', 'Module base address (hex)')
       .enum('table', ['imports', 'exports', 'both'], 'Which table to parse', { default: 'both' })
-      .required('pid', 'moduleBase')
+      .required('moduleBase')
       .query(),
   ),
   tool('memory_inline_hook_detect', (t) =>
@@ -383,9 +389,9 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Detect inline hooks by comparing the first 16 bytes of each exported function on disk vs in memory. ' +
           'Identifies JMP rel32, JMP abs64, PUSH+RET hooks and decodes jump targets.',
       )
-      .number('pid', 'Target process ID')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
       .string('moduleName', 'Module name filter (optional — scans all modules if omitted)')
-      .required('pid')
+      .required()
       .query(),
   ),
 
@@ -397,8 +403,8 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
           ' timing checks (QPC, GetTickCount), thread hiding, heap flag checks, and DR register inspection. Each ' +
           'detection includes a bypass suggestion.',
       )
-      .number('pid', 'Target process ID')
-      .required('pid')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .required()
       .query(),
   ),
   tool('memory_guard_pages', (t) =>
@@ -407,8 +413,8 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Find all memory regions with PAGE_GUARD protection in a process. Guard pages are often used as ' +
           'anti-tampering mechanisms or stack overflow detection.',
       )
-      .number('pid', 'Target process ID')
-      .required('pid')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .required()
       .query(),
   ),
   tool('memory_integrity_check', (t) =>
@@ -417,8 +423,8 @@ export const memoryScanToolDefinitions: readonly Tool[] = [
         'Check executable memory regions against their corresponding on-disk PE files (.text sections) to detect ' +
           'modifications like inline hooks or code patches.',
       )
-      .number('pid', 'Target process ID')
-      .required('pid')
+      .number('pid', 'Target process ID (optional when a browser session is attached)')
+      .required()
       .query(),
   ),
 ];

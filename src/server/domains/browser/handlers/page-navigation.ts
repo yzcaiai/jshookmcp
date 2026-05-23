@@ -23,6 +23,11 @@ interface PageNavigationHandlersDeps {
   getCamoufoxPage: () => Promise<unknown>;
   getTabRegistry?: () => TabRegistry;
   eventBus?: EventBus<ServerEventMap>;
+  onBrowserAttachStateChanged?: (snapshot: {
+    selectedUrl?: string | null;
+    selectedTitle?: string | null;
+    rendererPid?: number | null;
+  }) => void;
 }
 
 export class PageNavigationHandlers {
@@ -38,6 +43,21 @@ export class PageNavigationHandlers {
     const title = meta.title;
     const pageId = registry.upsertPage(page, { url, title });
     registry.setCurrentPageId(pageId);
+  }
+
+  private syncRuntimeAttachMeta(meta: { url?: string; title?: string }): void {
+    if (!this.deps.onBrowserAttachStateChanged) {
+      return;
+    }
+    if (!meta.url || meta.title === undefined) {
+      return;
+    }
+    this.deps.onBrowserAttachStateChanged({
+      selectedUrl: meta.url,
+      selectedTitle: meta.title,
+      // Force renderer re-resolution after navigation or cross-site process swaps.
+      rendererPid: null,
+    });
   }
 
   private async getChromePageIfAvailable(): Promise<unknown | null> {
@@ -90,6 +110,7 @@ export class PageNavigationHandlers {
         const navigatedUrl = this.getCamoufoxUrlIfAvailable(page) ?? '';
         const title = await this.getCamoufoxTitleIfAvailable(page);
         this.syncCurrentTabMeta(page, { url: navigatedUrl, title });
+        this.syncRuntimeAttachMeta({ url: navigatedUrl, title });
         void this.deps.eventBus?.emit('browser:navigated', {
           url: navigatedUrl,
           timestamp: new Date().toISOString(),
@@ -116,6 +137,7 @@ export class PageNavigationHandlers {
       const currentUrl = await this.deps.pageController.getURL();
       const title = await this.deps.pageController.getTitle();
       this.syncCurrentTabMeta(page, { url: currentUrl, title });
+      this.syncRuntimeAttachMeta({ url: currentUrl, title });
       void this.deps.eventBus?.emit('browser:navigated', {
         url: currentUrl,
         timestamp: new Date().toISOString(),
@@ -138,19 +160,19 @@ export class PageNavigationHandlers {
       if (this.deps.getActiveDriver() === 'camoufox') {
         const page = (await this.deps.getCamoufoxPage()) as CamoufoxPageLike;
         await page.reload();
-        this.syncCurrentTabMeta(page, {
-          url: this.getCamoufoxUrlIfAvailable(page),
-          title: await this.getCamoufoxTitleIfAvailable(page),
-        });
+        const url = this.getCamoufoxUrlIfAvailable(page);
+        const title = await this.getCamoufoxTitleIfAvailable(page);
+        this.syncCurrentTabMeta(page, { url, title });
+        this.syncRuntimeAttachMeta({ url, title });
         return R.ok().build({ message: 'Page reloaded', driver: 'camoufox' });
       }
 
       await this.deps.pageController.reload();
       const page = await this.getChromePageIfAvailable();
-      this.syncCurrentTabMeta(page, {
-        url: await this.deps.pageController.getURL(),
-        title: await this.deps.pageController.getTitle(),
-      });
+      const url = await this.deps.pageController.getURL();
+      const title = await this.deps.pageController.getTitle();
+      this.syncCurrentTabMeta(page, { url, title });
+      this.syncRuntimeAttachMeta({ url, title });
 
       return R.ok().build({
         message: 'Page reloaded',
@@ -167,20 +189,19 @@ export class PageNavigationHandlers {
       if (this.deps.getActiveDriver() === 'camoufox') {
         const page = (await this.deps.getCamoufoxPage()) as CamoufoxPageLike;
         await page.goBack();
-        this.syncCurrentTabMeta(page, {
-          url: this.getCamoufoxUrlIfAvailable(page),
-          title: await this.getCamoufoxTitleIfAvailable(page),
-        });
-        return R.ok().build({ url: this.getCamoufoxUrlIfAvailable(page), driver: 'camoufox' });
+        const url = this.getCamoufoxUrlIfAvailable(page);
+        const title = await this.getCamoufoxTitleIfAvailable(page);
+        this.syncCurrentTabMeta(page, { url, title });
+        this.syncRuntimeAttachMeta({ url, title });
+        return R.ok().build({ url, driver: 'camoufox' });
       }
 
       await this.deps.pageController.goBack(timeout);
       const page = await this.getChromePageIfAvailable();
       const url = await this.deps.pageController.getURL();
-      this.syncCurrentTabMeta(page, {
-        url,
-        title: await this.deps.pageController.getTitle(),
-      });
+      const title = await this.deps.pageController.getTitle();
+      this.syncCurrentTabMeta(page, { url, title });
+      this.syncRuntimeAttachMeta({ url, title });
 
       return R.ok().build({
         url,
@@ -197,20 +218,19 @@ export class PageNavigationHandlers {
       if (this.deps.getActiveDriver() === 'camoufox') {
         const page = (await this.deps.getCamoufoxPage()) as CamoufoxPageLike;
         await page.goForward();
-        this.syncCurrentTabMeta(page, {
-          url: this.getCamoufoxUrlIfAvailable(page),
-          title: await this.getCamoufoxTitleIfAvailable(page),
-        });
-        return R.ok().build({ url: this.getCamoufoxUrlIfAvailable(page), driver: 'camoufox' });
+        const url = this.getCamoufoxUrlIfAvailable(page);
+        const title = await this.getCamoufoxTitleIfAvailable(page);
+        this.syncCurrentTabMeta(page, { url, title });
+        this.syncRuntimeAttachMeta({ url, title });
+        return R.ok().build({ url, driver: 'camoufox' });
       }
 
       await this.deps.pageController.goForward(timeout);
       const page = await this.getChromePageIfAvailable();
       const url = await this.deps.pageController.getURL();
-      this.syncCurrentTabMeta(page, {
-        url,
-        title: await this.deps.pageController.getTitle(),
-      });
+      const title = await this.deps.pageController.getTitle();
+      this.syncCurrentTabMeta(page, { url, title });
+      this.syncRuntimeAttachMeta({ url, title });
 
       return R.ok().build({
         url,

@@ -119,6 +119,7 @@ export function initializeBrowserHandlerModules(
       consoleMonitor: deps.consoleMonitor,
       getTabRegistry,
       eventBus: deps.eventBus,
+      onBrowserAttachStateChanged: deps.onBrowserAttachStateChanged,
       ...commonDeps,
     }),
 

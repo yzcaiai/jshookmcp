@@ -9,7 +9,7 @@ function toolByName(name: string) {
 }
 
 describe('memory tool schema coverage', () => {
-  it('declares pid for scan and structure tools that require a target process', async () => {
+  it('keeps pid optional for memory tools that support runtime auto-discovery', async () => {
     for (const name of [
       'memory_first_scan',
       'memory_unknown_scan',
@@ -19,7 +19,7 @@ describe('memory tool schema coverage', () => {
     ]) {
       const tool = toolByName(name);
       expect(tool.inputSchema.properties).toHaveProperty('pid');
-      expect(tool.inputSchema.required).toContain('pid');
+      expect(tool.inputSchema.required ?? []).not.toContain('pid');
     }
   });
 

@@ -181,8 +181,8 @@ export class ProcessManager {
     try {
       pid = safePid(pid);
       const psCommand =
-        `Get-Process -Id ${pid} -ErrorAction SilentlyContinue` +
-        'Select-Object Id, ProcessName, Path, MainWindowTitle, MainWindowHandle, CPU, WorkingSet64, StartTime' +
+        `Get-Process -Id ${pid} -ErrorAction SilentlyContinue | ` +
+        'Select-Object Id, ProcessName, Path, MainWindowTitle, MainWindowHandle, CPU, WorkingSet64, StartTime | ' +
         'ConvertTo-Json -Compress';
 
       const { stdout } = await execAsync(
@@ -281,7 +281,7 @@ export class ProcessManager {
       pid = safePid(pid);
       const psCommand =
         `Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}' | Select-Object ` +
-        `CommandLine, ParentProcessId` +
+        `CommandLine, ParentProcessId | ` +
         'ConvertTo-Json -Compress';
 
       const { stdout } = await execAsync(

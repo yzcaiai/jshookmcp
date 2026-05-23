@@ -12,16 +12,26 @@ describe('process domain definitions', () => {
     expect(tool?.inputSchema.properties).toHaveProperty('wsEndpoint');
   });
 
-  it('declares pid for process memory and injection tools that require it', async () => {
+  it('keeps pid optional for memory tools that support runtime auto-discovery', async () => {
     for (const name of [
       'memory_read',
       'memory_write',
       'memory_scan',
       'memory_check_protection',
       'memory_scan_filtered',
-      'inject_dll',
-      'inject_shellcode',
+      'memory_batch_write',
+      'memory_dump_region',
+      'memory_list_regions',
     ]) {
+      const tool = processToolDefinitions.find((candidate) => candidate.name === name);
+      expect(tool, `Missing tool definition: ${name}`).toBeDefined();
+      expect(tool?.inputSchema.properties).toHaveProperty('pid');
+      expect(tool?.inputSchema.required ?? []).not.toContain('pid');
+    }
+  });
+
+  it('keeps pid required for process and injection tools that cannot auto-discover a target', async () => {
+    for (const name of ['inject_dll', 'inject_shellcode']) {
       const tool = processToolDefinitions.find((candidate) => candidate.name === name);
       expect(tool, `Missing tool definition: ${name}`).toBeDefined();
       expect(tool?.inputSchema.properties).toHaveProperty('pid');

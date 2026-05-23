@@ -319,6 +319,16 @@ export class BrowserControlHandlers {
           registry.setCurrentByIndex(0);
         }
         const currentPage = pages[0];
+        this.deps.onBrowserAttachStateChanged?.({
+          endpoint: null,
+          selectedIndex: pages.length > 0 ? 0 : null,
+          selectedUrl: currentPage?.url ?? null,
+          selectedTitle: currentPage?.title ?? null,
+          selectedTargetId: null,
+          browserPid: this.deps.collector.getChromePid(),
+          rendererPid: null,
+          attachedAt: new Date().toISOString(),
+        });
 
         const status = await this.deps.collector.getStatus();
 
@@ -353,6 +363,23 @@ export class BrowserControlHandlers {
           ...launchRequest,
           headless: true,
         });
+        const pages = await this.deps.collector.listPages();
+        const registry = this.deps.getTabRegistry();
+        if (pages.length > 0) {
+          await this.deps.collector.selectPage(0);
+          registry.setCurrentByIndex(0);
+        }
+        const currentPage = pages[0];
+        this.deps.onBrowserAttachStateChanged?.({
+          endpoint: null,
+          selectedIndex: pages.length > 0 ? 0 : null,
+          selectedUrl: currentPage?.url ?? null,
+          selectedTitle: currentPage?.title ?? null,
+          selectedTargetId: null,
+          browserPid: this.deps.collector.getChromePid(),
+          rendererPid: null,
+          attachedAt: new Date().toISOString(),
+        });
         const fallbackStatus = await this.deps.collector.getStatus();
 
         return R.ok()
@@ -363,6 +390,10 @@ export class BrowserControlHandlers {
             relaunchReason: launch.reason ?? null,
             v8NativeSyntaxEnabled: launch.launchOptions.v8NativeSyntaxEnabled,
             launchArgs: launch.launchOptions.args,
+            selectedIndex: pages.length > 0 ? 0 : null,
+            currentUrl: currentPage?.url ?? null,
+            currentTitle: currentPage?.title ?? null,
+            totalPages: pages.length,
             status: fallbackStatus,
             fallback: {
               applied: true,

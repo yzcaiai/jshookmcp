@@ -90,12 +90,14 @@ function mockDeps(driver: Driver = 'chrome') {
   } satisfies ConsoleMonitorStub;
 
   const tabRegistry = new TabRegistry<object>();
+  const onBrowserAttachStateChanged = vi.fn();
   const deps = {
     pageController: pageController as unknown as PageNavigationDeps['pageController'],
     consoleMonitor: consoleMonitor as unknown as PageNavigationDeps['consoleMonitor'],
     getActiveDriver: vi.fn<PageNavigationDeps['getActiveDriver']>().mockReturnValue(driver),
     getCamoufoxPage: vi.fn<PageNavigationDeps['getCamoufoxPage']>().mockResolvedValue(camoufoxPage),
     getTabRegistry: vi.fn(() => tabRegistry),
+    onBrowserAttachStateChanged,
   } satisfies PageNavigationDeps;
 
   return {
@@ -105,6 +107,7 @@ function mockDeps(driver: Driver = 'chrome') {
     consoleMonitor,
     tabRegistry,
     activeChromePage,
+    onBrowserAttachStateChanged,
   };
 }
 
@@ -209,7 +212,8 @@ describe('PageNavigationHandlers', () => {
     });
 
     it('updates tab registry context immediately after chrome navigation', async () => {
-      const { deps, tabRegistry, activeChromePage } = mockDeps('chrome');
+      const { deps, tabRegistry, activeChromePage, onBrowserAttachStateChanged } =
+        mockDeps('chrome');
       const pageId = tabRegistry.registerPage(activeChromePage, {
         index: 4,
         url: buildTestUrl('old', { suffix: 'example', path: '/' }),
@@ -224,6 +228,11 @@ describe('PageNavigationHandlers', () => {
         title: 'Chrome Page',
         tabIndex: 4,
         pageId,
+      });
+      expect(onBrowserAttachStateChanged).toHaveBeenCalledWith({
+        selectedUrl: buildTestUrl('', { path: 'chrome' }),
+        selectedTitle: 'Chrome Page',
+        rendererPid: null,
       });
     });
 

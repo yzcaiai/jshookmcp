@@ -27,14 +27,14 @@
 | `process_windows` | 获取指定进程关联的全部窗口句柄。 |
 | `process_check_debug_port` | 检查目标进程是否已开启可用于 CDP 附加的调试端口。 |
 | `process_launch_debug` | 以启用远程调试端口的方式启动可执行文件。 |
-| `memory_read` | 读取目标进程指定地址的内存内容。需要提权。失败时返回结构化 diagnostics。 |
-| `memory_write` | 向目标进程指定地址写入内存数据。需要提权。失败时返回结构化 diagnostics。 |
-| `memory_scan` | 按模式或数值扫描进程内存。需要提权。失败时返回结构化 diagnostics。 |
-| `memory_check_protection` | 检查指定内存地址的保护属性，如可读、可写、可执行。 |
-| `memory_scan_filtered` | 在已筛选地址范围内执行二次内存扫描。 |
-| `memory_batch_write` | 一次性写入多处内存补丁。 |
-| `memory_dump_region` | 将指定内存区域转储到文件以供分析。 |
-| `memory_list_regions` | 列出进程中的全部内存区域及其保护标志。 |
+| `memory_read` | 读取目标进程指定地址的内存内容。需要提权。失败时返回结构化 diagnostics。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
+| `memory_write` | 向目标进程指定地址写入内存数据。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
+| `memory_scan` | 按模式或数值扫描进程内存。需要提权。失败时返回结构化 diagnostics。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
+| `memory_check_protection` | 检查指定内存地址的保护属性，如可读、可写、可执行。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
+| `memory_scan_filtered` | 在已筛选地址范围内执行二次内存扫描。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
+| `memory_batch_write` | 一次性写入多处内存补丁。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
+| `memory_dump_region` | 将指定内存区域转储到文件以供分析。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
+| `memory_list_regions` | 列出进程中的全部内存区域及其保护标志。若省略 `pid`，会尝试从当前附加的浏览器会话自动解析 renderer PID。 |
 | `memory_audit_export` | 导出内存操作审计轨迹为 JSON，并可通过 clear=true 在导出后清空缓冲区。 |
 | `inject_dll` | 通过 CreateRemoteThread 与 LoadLibraryA (Windows) 或 gdb/lldb (Linux/macOS) 向目标进程注入 DLL 或 shared object。默认启用；可通过 ENABLE_INJECTION_TOOLS=false 禁用。需要高权限。 |
 | `inject_shellcode` | 向目标进程注入并执行 Shellcode，支持 hex 或 base64。默认启用；可通过 ENABLE_INJECTION_TOOLS=false 禁用。 |

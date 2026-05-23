@@ -209,6 +209,12 @@ describe('ProcessManager advanced scenarios', () => {
         cpuUsage: 5.2,
         memoryUsage: 123456789,
       });
+      expect(state.execAsync).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Get-Process -Id 1234 -ErrorAction SilentlyContinue | Select-Object Id, ProcessName, Path, MainWindowTitle, MainWindowHandle, CPU, WorkingSet64, StartTime | ConvertTo-Json -Compress',
+        ),
+        expect.objectContaining({ maxBuffer: 1024 * 1024 }),
+      );
     });
 
     it('throws on invalid PID (zero)', async () => {
@@ -298,6 +304,12 @@ describe('ProcessManager advanced scenarios', () => {
 
       expect(result.commandLine).toBe('C:/app.exe --flag=value');
       expect(result.parentPid).toBe(100);
+      expect(state.execAsync).toHaveBeenCalledWith(
+        expect.stringContaining(
+          `Get-CimInstance Win32_Process -Filter 'ProcessId = 200' | Select-Object CommandLine, ParentProcessId | ConvertTo-Json -Compress`,
+        ),
+        expect.objectContaining({ maxBuffer: 1024 * 1024 }),
+      );
     });
 
     it('returns empty object when stdout is null', async () => {

@@ -4,6 +4,8 @@ Domain: `memory`
 
 Memory analysis domain for native scans, pointer-chain discovery, structure inference, and breakpoint-based observation.
 
+Note: `pid` can now be omitted for most tools. When a browser session is currently attached, the server auto-discovers the active renderer PID and uses it as the target process. If no browser is attached, or renderer resolution fails, provide `pid` explicitly.
+
 ## Profiles
 
 - full

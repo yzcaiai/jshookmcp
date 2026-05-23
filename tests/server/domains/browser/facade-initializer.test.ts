@@ -258,4 +258,12 @@ describe('initializeBrowserHandlerModules', () => {
     expect(typeof call.getTabRegistry).toBe('function');
     expect(call.getTabRegistry()).toBe(modules.tabRegistry);
   });
+
+  it('passes onBrowserAttachStateChanged to PageNavigationHandlers', async () => {
+    const deps = makeDeps();
+    initializeBrowserHandlerModules(deps);
+
+    const call = handlers.PageNavigationHandlers.mock.calls[0]![0];
+    expect(call.onBrowserAttachStateChanged).toBe(deps.onBrowserAttachStateChanged);
+  });
 });

@@ -122,15 +122,20 @@ function createMocks() {
 describe('BrowserControlHandlers – handleBrowserLaunch', () => {
   let handlers: BrowserControlHandlers;
   let collector: CollectorMock;
+  let onBrowserAttachStateChanged: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     const m = createMocks();
     collector = m.collector;
+    onBrowserAttachStateChanged = m.onBrowserAttachStateChanged;
     handlers = new BrowserControlHandlers(m.deps);
   });
 
   it('launches chrome in default mode and returns status', async () => {
+    collector.listPages.mockResolvedValueOnce([
+      { index: 0, url: testUrls.TEST_URLS.root, title: 'Example' },
+    ]);
     collector.getStatus.mockResolvedValueOnce({ connected: true, pages: 1 });
     const body = parseJson<BrowserLaunchResponse>(await handlers.handleBrowserLaunch({}));
     expect(collector.launch).toHaveBeenCalledWith({
@@ -141,6 +146,15 @@ describe('BrowserControlHandlers – handleBrowserLaunch', () => {
     expect(body.success).toBe(true);
     expect(body.driver).toBe('chrome');
     expect(body.status.connected).toBe(true);
+    expect(onBrowserAttachStateChanged).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectedIndex: 0,
+        selectedUrl: testUrls.TEST_URLS.root,
+        selectedTitle: 'Example',
+        browserPid: 4321,
+        rendererPid: null,
+      }),
+    );
   });
 
   it('connects chrome when mode=connect with browserURL', async () => {

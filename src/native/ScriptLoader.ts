@@ -3,36 +3,19 @@ import { join } from 'node:path';
 import { platform } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-// Lazy-initialize base directory to avoid direct import.meta parsing pitfalls.
 let scriptsBaseDir: string | null = null;
 
 function tryGetEsmBaseDir(): string | null {
-  try {
-    const readImportMetaUrl = new Function(
-      'try { return import.meta.url ?? null; } catch { return null; }',
-    ) as () => string | null;
-
-    const metaUrl = readImportMetaUrl();
-    return metaUrl ? fileURLToPath(new URL('.', metaUrl)) : null;
-  } catch {
-    return null;
-  }
-}
-
-function getScriptsBaseDir(): string {
-  if (scriptsBaseDir) return scriptsBaseDir;
-
-  const esmBaseDir = tryGetEsmBaseDir();
-  if (esmBaseDir) {
-    scriptsBaseDir = esmBaseDir;
+  if (scriptsBaseDir) {
     return scriptsBaseDir;
   }
 
-  // Fallback for test/CLI contexts where import.meta is unavailable.
-  // Security note: the constructor validates that specific known script
-  // directories exist before using the path, so cwd alone cannot be
-  // used to hijack arbitrary files.
-  return process.cwd();
+  try {
+    scriptsBaseDir = fileURLToPath(new URL('.', import.meta.url));
+    return scriptsBaseDir;
+  } catch {
+    return null;
+  }
 }
 
 export class ScriptLoader {
@@ -40,17 +23,19 @@ export class ScriptLoader {
   private scriptsDir: string;
 
   constructor() {
-    const esmDir = getScriptsBaseDir();
+    const esmDir = tryGetEsmBaseDir();
     // In tsdown flat mode, esmDir is 'dist' so we check native/scripts.
     // In src or test mode, it's deep inside src/native, where scripts are alongside it.
-    if (existsSync(join(esmDir, 'native', 'scripts'))) {
+    if (esmDir && existsSync(join(esmDir, 'native', 'scripts'))) {
       this.scriptsDir = join(esmDir, 'native', 'scripts');
-    } else if (existsSync(join(esmDir, 'scripts'))) {
+    } else if (esmDir && existsSync(join(esmDir, 'scripts'))) {
       this.scriptsDir = join(esmDir, 'scripts');
     } else if (existsSync(join(process.cwd(), 'dist', 'native', 'scripts'))) {
       this.scriptsDir = join(process.cwd(), 'dist', 'native', 'scripts');
-    } else {
+    } else if (existsSync(join(process.cwd(), 'src', 'native', 'scripts'))) {
       this.scriptsDir = join(process.cwd(), 'src', 'native', 'scripts');
+    } else {
+      this.scriptsDir = join(process.cwd(), 'dist', 'native', 'scripts');
     }
   }
 
