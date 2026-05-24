@@ -153,6 +153,20 @@ export class ResponseBuilder {
   }
 }
 
+/** Safely execute an async handler, returning success/error ToolResponse automatically. */
+export function handleSafe(
+  fn: () => Promise<Record<string, unknown>> | Promise<unknown>,
+): Promise<ToolResponse> {
+  return fn()
+    .then((data) =>
+      new ResponseBuilder()
+        .ok()
+        .merge(data as Record<string, unknown>)
+        .json(),
+    )
+    .catch((error) => new ResponseBuilder().fail(error).json());
+}
+
 /** Shorthand factory — the primary entry point for building responses. */
 export const R = {
   /** Start a success response (`{ success: true, ... }`). */
