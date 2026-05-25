@@ -47,15 +47,6 @@ export const DEFAULT_RULES: readonly CategoryRule[] = Object.freeze([
   { category: 'classNames', pattern: /^_?[A-Z][a-zA-Z0-9]{2,}$/, exclude: /^[A-Z0-9_]+$/ },
 ]);
 
-/** Default category keys produced by DEFAULT_RULES. Kept in sync with DEFAULT_RULES order. */
-const DEFAULT_CATEGORY_KEYS: readonly CategoryKey[] = Object.freeze([
-  'urls',
-  'paths',
-  'packageRefs',
-  'cryptoKeywords',
-  'classNames',
-]);
-
 /**
  * Heuristic patterns that flag catastrophic backtracking shapes
  * (e.g. `(a+)+`, `(a*)+b`, `(a|b)+c+`). Not exhaustive — pairs with the
@@ -201,8 +192,9 @@ function sortAscByValue(a: ExtractedString, b: ExtractedString): number {
  * Within each bucket strings are sorted alphabetically by `value` so output
  * is deterministic across runs.
  *
- * Default category keys always appear in the result (as empty arrays) so
- * downstream consumers can index without checking for `undefined`.
+ * The result is seeded with every category appearing in `rules` (as empty
+ * arrays). Categories not referenced by any rule never appear in the output
+ * — this means `ruleMode: 'replace'` cleanly removes the default keys.
  */
 export function categorize(
   strings: readonly ExtractedString[],
@@ -210,8 +202,11 @@ export function categorize(
   includeRaw: boolean,
 ): ExtractedStrings {
   const buckets = new Map<CategoryKey, ExtractedString[]>();
-  // Seed default keys so they appear as empty arrays even when no string matches.
-  for (const key of DEFAULT_CATEGORY_KEYS) buckets.set(key, []);
+  // Seed buckets for every category referenced by the rule chain so they
+  // appear as empty arrays in the output instead of being missing keys.
+  for (const rule of rules) {
+    if (!buckets.has(rule.category)) buckets.set(rule.category, []);
+  }
   const rawBucket: ExtractedString[] = [];
 
   for (const item of strings) {
