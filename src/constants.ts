@@ -869,3 +869,46 @@ export const MCP_LOG_LEVEL = str('MCP_LOG_LEVEL', 'info');
 
 /** Directory for file-based MCP log persistence. Empty = disabled. */
 export const MCP_LOG_FILE_DIR = str('MCP_LOG_FILE_DIR', '');
+
+/* ================================================================== */
+/*  Dart Inspector (libapp.so string extraction)                       */
+/* ================================================================== */
+
+/**
+ * Minimum length for a string to be considered. Below the floor the extractor
+ * emits nothing useful (entropy noise), above the ceiling almost no real Dart
+ * symbol exists. Both are user-tunable.
+ */
+export const DART_MIN_LENGTH = int('DART_MIN_LENGTH', 4);
+export const DART_MIN_LENGTH_FLOOR = int('DART_MIN_LENGTH_FLOOR', 2);
+export const DART_MIN_LENGTH_CEILING = int('DART_MIN_LENGTH_CEILING', 64);
+
+/**
+ * Streaming chunk parameters. Overlap MUST cover the largest expected single
+ * string so that strings straddling a chunk boundary are still detected.
+ */
+export const DART_MAX_CHUNK_BYTES = int('DART_MAX_CHUNK_BYTES', 16 * 1024 * 1024);
+export const DART_CHUNK_OVERLAP_BYTES = int('DART_CHUNK_OVERLAP_BYTES', 128);
+
+/** Printable ASCII range used when scanning ASCII strings. */
+export const DART_PRINTABLE_ASCII_MIN = int('DART_PRINTABLE_ASCII_MIN', 0x20);
+export const DART_PRINTABLE_ASCII_MAX = int('DART_PRINTABLE_ASCII_MAX', 0x7e);
+
+/** Default encoding for dart_strings_extract: 'ascii' | 'utf16le' | 'both'. */
+export const DART_DEFAULT_ENCODING = str('DART_DEFAULT_ENCODING', 'both');
+
+/** Max offsets recorded per unique string. Excess offsets are truncated and marked. */
+export const DART_MAX_OFFSETS_PER_STRING = int('DART_MAX_OFFSETS_PER_STRING', 1000);
+
+/**
+ * customRules safety knobs. MAX_REGEX_PATTERN_LENGTH caps the pattern source,
+ * REGEX_TIMEOUT_MS bounds a single match attempt at runtime, ALLOWED_REGEX_FLAGS
+ * restricts which flags users may supply (g is added internally; m/y/s rejected).
+ */
+export const DART_MAX_REGEX_PATTERN_LENGTH = int('DART_MAX_REGEX_PATTERN_LENGTH', 256);
+export const DART_REGEX_TIMEOUT_MS = int('DART_REGEX_TIMEOUT_MS', 50);
+export const DART_ALLOWED_REGEX_FLAGS = str('DART_ALLOWED_REGEX_FLAGS', 'iu');
+
+/** Overall budget for a single dart_strings_extract call (ms / payload bytes). */
+export const DART_MAX_EXTRACT_DURATION_MS = int('DART_MAX_EXTRACT_DURATION_MS', 30_000);
+export const DART_MAX_RESULT_BYTES = int('DART_MAX_RESULT_BYTES', 16 * 1024 * 1024);

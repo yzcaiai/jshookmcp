@@ -219,7 +219,7 @@ export default defineConfig({
             'tests/contracts/**/*.test.ts',
             'tests/cli/**/*.test.ts',
             'tests/packages/**/*.test.ts',
-            'tests/constants.test.ts',
+            'tests/constants*.test.ts',
           ],
           exclude: ['tests/e2e/**'],
           setupFiles: ['tests/setup.light.ts'],
