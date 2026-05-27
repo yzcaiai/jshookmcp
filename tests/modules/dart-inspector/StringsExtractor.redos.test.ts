@@ -55,6 +55,7 @@ afterAll(async () => {
 
 describe('ReDoS red line 1 — compile-time heuristic rejection', () => {
   it('rejects (a+)+b as catastrophic at compile time', () => {
+    // codeql[js/redos] ignore — intentional evil pattern testing rejection
     expect(() => compileRuleInput({ category: 'evil', pattern: '(a+)+b' })).toThrowError(
       expect.objectContaining({
         name: 'ToolError',
@@ -76,6 +77,7 @@ describe('ReDoS red line 1 — compile-time heuristic rejection', () => {
     // expects already-compiled CategoryRule[]); the rejection happens at the
     // compileRuleInput boundary which is what the handler layer will call.
     // This test pins that the boundary stays the gatekeeper.
+    // codeql[js/redos] ignore — intentional evil pattern testing rejection
     expect(() => compileRuleInput({ category: 'evil', pattern: '(a+)+b' })).toThrow(ToolError);
     expect(extractor).toBeInstanceOf(StringsExtractor); // touch instance to defeat unused-var lint
   });
@@ -92,6 +94,7 @@ describe('ReDoS red line 2 — runtime per-test timeout', () => {
     // out.
     const slowRule = compileRuleInput({
       category: 'slowAmbiguous',
+      // codeql[js/redos] ignore — intentional ambiguous alternation for runtime timeout test
       pattern: '^(a|a)*$',
     });
 

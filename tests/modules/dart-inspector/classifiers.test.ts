@@ -145,6 +145,7 @@ describe('compileRuleInput', () => {
     expect(() => compileRuleInput({ category: 'x', pattern: '(a+)+' })).toThrowError(
       expect.objectContaining({ name: 'ToolError', code: 'VALIDATION' }),
     );
+    // codeql[js/redos] ignore — intentional evil pattern testing rejection
     expect(() => compileRuleInput({ category: 'x', pattern: '(a*)+b' })).toThrowError(
       expect.objectContaining({ name: 'ToolError', code: 'VALIDATION' }),
     );

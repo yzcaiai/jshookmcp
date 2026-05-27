@@ -113,6 +113,7 @@ describe('compileRuleInput — enableWhenFileNameMatches', () => {
       compileRuleInput({
         category: 'evil',
         pattern: '^a',
+        // codeql[js/redos] ignore — intentional evil pattern testing rejection
         enableWhenFileNameMatches: '(a+)+b',
       }),
     ).toThrowError(expect.objectContaining({ name: 'ToolError', code: 'VALIDATION' }));

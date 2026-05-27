@@ -19,6 +19,7 @@ describe('ReDoS red line 1 — compile-time heuristic rejection', () => {
       compileSignatureInput({
         name: 'evil',
         category: 'attacker',
+        // codeql[js/redos] ignore — intentional evil pattern testing rejection
         libPatterns: ['^(a+)+$'],
       }),
     ).toThrowError(
@@ -45,6 +46,7 @@ describe('ReDoS red line 1 — compile-time heuristic rejection', () => {
       compileSignatureInput({
         name: 'evil',
         category: 'attacker',
+        // codeql[js/redos] ignore — intentional evil pattern testing rejection
         libPatterns: ['(a*)+b'],
       }),
     ).toThrowError(expect.objectContaining({ name: 'ToolError', code: 'VALIDATION' }));
@@ -114,6 +116,7 @@ describe('ReDoS red line 1 — compile-time heuristic rejection', () => {
 
 describe('ReDoS red line 2 — runtime per-test timeout', () => {
   it('aborts when a single .test() exceeds the timeout budget', () => {
+    // codeql[js/redos] ignore — intentional evil pattern testing rejection
     const slow = new RegExp('^(a|a)*$');
     const longA = 'a'.repeat(30);
     expect(() => testPatternTimed(slow, longA, 0, 'evil')).toThrowError(
