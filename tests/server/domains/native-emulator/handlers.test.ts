@@ -157,6 +157,8 @@ describe('NativeEmulatorHandlers — happy path', () => {
     // Phase 2-5 capabilities are surfaced for an AI to discover.
     expect(features).toContain('elf-relocations');
     expect(features).toContain('auto-wire-bionic-libc');
+    // Bionic stdio VFS lets anti-tamper file probes (RootBeer exists()) be evaluated.
+    expect(features).toContain('bionic-stdio-vfs');
     expect(features).toContain('java-mock-field');
     expect(features).toContain('exclusive-load-store');
     expect(features).toContain('system-register-read');
