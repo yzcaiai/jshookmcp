@@ -159,6 +159,8 @@ describe('NativeEmulatorHandlers — happy path', () => {
     expect(features).toContain('auto-wire-bionic-libc');
     // Bionic stdio VFS lets anti-tamper file probes (RootBeer exists()) be evaluated.
     expect(features).toContain('bionic-stdio-vfs');
+    // JNI object-array iteration (GetArrayLength on String[]) drives native loops.
+    expect(features).toContain('jni-object-array-iteration');
     expect(features).toContain('java-mock-field');
     expect(features).toContain('exclusive-load-store');
     expect(features).toContain('system-register-read');

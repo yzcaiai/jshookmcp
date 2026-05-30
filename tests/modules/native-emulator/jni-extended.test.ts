@@ -145,3 +145,46 @@ describe('JNI extended — references', () => {
     expect(engine.readRegister('x0')).toBe(1);
   });
 });
+
+describe('JNI extended — GetArrayLength', () => {
+  // GetArrayLength(env, array): x0 = env (preset in x19), x1 = array handle
+  // (preset in x22 — handles are 32-bit guest addresses, awkward as inline imm).
+  const lengthOf = (jni: JniEnvironment, engine: CpuEngine, handle: number): number => {
+    engine.writeRegister('x22', handle);
+    const code: number[] = [];
+    for (const x of [movReg(0, 19), movReg(1, 22)]) code.push(...le(x));
+    code.push(...callJni(JNI_INDEX.GetArrayLength));
+    engine.mapMemory(CODE_ADDR, code.length + 16);
+    engine.writeCode(CODE_ADDR, Uint8Array.from(code));
+    engine.writeRegister('x19', jni.envPointer());
+    engine.start(CODE_ADDR, CODE_ADDR + code.length);
+    return engine.readRegister('x0');
+  };
+
+  it('reports the real length of an object array (String[]) — drives native for-loops', () => {
+    // Regression: an objarray previously returned 0, so a native
+    // `for (i=0; i<GetArrayLength(paths); i++)` loop (RootBeer's checkForRoot)
+    // never iterated. It must report the element count.
+    const engine = new CpuEngine();
+    const jni = new JniEnvironment(engine);
+    const elems = ['/system/xbin/su', '/sbin/su', '/data/local/su'].map((p) =>
+      BigInt(jni.allocHandle({ kind: 'string', value: p })),
+    );
+    const arr = jni.allocHandle({ kind: 'objarray', value: elems });
+    expect(lengthOf(jni, engine, arr)).toBe(3);
+  });
+
+  it('reports the real length of a byte array', () => {
+    const engine = new CpuEngine();
+    const jni = new JniEnvironment(engine);
+    const arr = jni.allocHandle({ kind: 'bytes', value: new Uint8Array(7) });
+    expect(lengthOf(jni, engine, arr)).toBe(7);
+  });
+
+  it('returns 0 for a non-array handle', () => {
+    const engine = new CpuEngine();
+    const jni = new JniEnvironment(engine);
+    const str = jni.allocHandle({ kind: 'string', value: 'not-an-array' });
+    expect(lengthOf(jni, engine, str)).toBe(0);
+  });
+});
