@@ -20,7 +20,7 @@
 - native-emulator + binary-instrument
 - native-emulator + dart-inspector
 
-## 工具清单（14）
+## 工具清单（15）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -35,6 +35,7 @@
 | `nemu_call_symbol` | 按 AArch64 AAPCS 调用约定调用一个导出函数（参数放 x0..x7，结果在 x0）。用于普通 native 导出；Java_* JNI 入口请用 call_jni_export。 |
 | `nemu_call_jni_export` | 调用一个导出的 Java_* JNI 函数。自动注入 JNIEnv* 与 thiz，再传入 Java 参数。返回 x0——直接是 int/jboolean，或是 jobject/jbyteArray/jstring 句柄（用 read_byte_array 解析）。逆向 native 签名/加密例程的主入口。 |
 | `nemu_setup_java_mock` | 注册一个模拟 Java 方法，供被仿真的 native 代码经 JNI 回调（GetMethodID/GetStaticMethodID + Call*Method）。用 returnInt、returnString 或 returnBytes（base64）声明式指定返回值——模拟 native 例程计算前读取的「Java 世界」。不执行任何代码，仅返回配置的常量。 |
+| `nemu_setup_java_field` | 待补充中文：Register a mock Java field the emulated native code reads back via JNI (GetFieldID/GetStaticFieldID + Get&lt;Type&gt;Field). Declaratively specify the value with valueInt, valueString, or valueBytes (base64) — the 'Java world' constant a native routine folds into its result. No code is executed. |
 | `nemu_new_byte_array` | 将 base64 字节包装成 JNI jbyteArray 句柄，作为参数传入 call_jni_export（如签名例程要处理的明文）。返回该句柄。 |
 | `nemu_read_byte_array` | 将 jbyteArray 句柄（如 native 调用的返回值）解析回字节，以 base64 加长度返回。 |
 | `nemu_trace` | 调用一个导出符号，同时记录执行的每条指令（pc、操作码、步号），可选按步快照指定寄存器。受 maxSteps 限制。用于跟踪混淆 native 函数的控制流/算法。 |

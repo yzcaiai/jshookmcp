@@ -20,11 +20,11 @@ In-process, dependency-free self-built ARM64 interpreter for emulating Android `
 - native-emulator + binary-instrument
 - native-emulator + dart-inspector
 
-## Full tool list (14)
+## Full tool list (15)
 
 | Tool | Description |
 | --- | --- |
-| `nemu_capabilities` | Report native-emulator backend availability and supported features (self-built ARM64 interpreter, no external dependencies). |
+| `nemu_capabilities` | Report native-emulator backend availability and supported features (self-built ARM64 interpreter, no external dependencies). Emulates the integer AArch64 ISA + ELF relocations + auto-wired bionic libc + JNI; NEON/SIMD/FP and AES/SHA crypto-extension instructions are not yet supported (declared in the response). |
 | `nemu_create_session` | Create an isolated ARM64 emulator session and return its sessionId. Each session owns its own CPU registers, guest stack, and JNI object table, so concurrent analyses never interfere. Destroy it with nemu_destroy_session when done; idle sessions auto-expire. |
 | `nemu_destroy_session` | Destroy an emulator session and free its memory (mapped library, stack, JNI tables). |
 | `nemu_list_sessions` | List active emulator sessions with their creation and last-use timestamps. |
@@ -35,6 +35,7 @@ In-process, dependency-free self-built ARM64 interpreter for emulating Android `
 | `nemu_call_symbol` | Invoke an exported function by name following AArch64 AAPCS (integer args in x0..x7, result in x0). For plain native exports; use call_jni_export for Java_* JNI entry points. |
 | `nemu_call_jni_export` | Invoke an exported Java_* JNI function. Injects the guest JNIEnv* and thiz, then the Java arguments. Returns x0 — an int/jboolean directly, or a jobject/jbyteArray/jstring handle to resolve via read_byte_array. The main entry point for reversing a native signing/crypto routine. |
 | `nemu_setup_java_mock` | Register a mock Java method the emulated native code can call back into via JNI (GetMethodID/GetStaticMethodID + Call*Method). Declaratively specify the return value with returnInt, returnString, or returnBytes (base64) — emulating the 'Java world' a native routine reads from before computing its result. No code is executed; only the configured constant is returned. |
+| `nemu_setup_java_field` | Register a mock Java field the emulated native code reads back via JNI (GetFieldID/GetStaticFieldID + Get&lt;Type&gt;Field). Declaratively specify the value with valueInt, valueString, or valueBytes (base64) — the 'Java world' constant a native routine folds into its result. No code is executed. |
 | `nemu_new_byte_array` | Wrap base64 bytes as a JNI jbyteArray handle to pass as an argument into call_jni_export (e.g. the plaintext a signing routine consumes). Returns the handle. |
 | `nemu_read_byte_array` | Resolve a jbyteArray handle (e.g. a native call's return value) back to its bytes, returned as base64 plus length. |
 | `nemu_trace` | Invoke an exported symbol while recording every instruction executed (pc, opcode, step), optionally snapshotting named registers per step. Bounded by maxSteps. Use to follow the control flow / algorithm of an obfuscated native function. |

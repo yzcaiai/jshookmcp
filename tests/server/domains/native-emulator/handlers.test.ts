@@ -150,6 +150,21 @@ describe('NativeEmulatorHandlers — happy path', () => {
     expect(data.available).toBe(true);
   });
 
+  it('advertises the post-Phase-5 feature set and an honest ISA boundary', async () => {
+    handlers = new NativeEmulatorHandlers();
+    const data = payload(await handlers.handleCapabilities({}));
+    const features = data.features as string[];
+    // Phase 2-5 capabilities are surfaced for an AI to discover.
+    expect(features).toContain('elf-relocations');
+    expect(features).toContain('auto-wire-bionic-libc');
+    expect(features).toContain('java-mock-field');
+    expect(features).toContain('exclusive-load-store');
+    expect(features).toContain('system-register-read');
+    // The NEON gap is declared, not hidden.
+    expect(data.isa).toBe('aarch64-integer');
+    expect(String(data.note)).toMatch(/NEON/);
+  });
+
   it('creates a session and lists it', async () => {
     const id = await freshSession();
     expect(typeof id).toBe('string');

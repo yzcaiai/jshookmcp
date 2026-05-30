@@ -45,14 +45,23 @@ export class NativeEmulatorHandlers {
       external_dependencies: [],
       features: [
         'load-elf-so',
+        'elf-relocations',
+        'pt-dynamic-symbols',
+        'auto-wire-bionic-libc',
+        'android-syscalls',
+        'getrandom',
+        'system-register-read',
+        'exclusive-load-store',
         'call-exported-symbol',
         'call-jni-export',
         'java-mock-callback',
+        'java-mock-field',
         'apk-arm64-extract',
         'instruction-trace',
       ],
+      isa: 'aarch64-integer',
       activeSessions: this.sessions.count(),
-      note: 'In-process AArch64 interpreter. libapp.so (Flutter Dart AOT) is not executable here.',
+      note: 'In-process AArch64 interpreter — integer ISA only. NEON/SIMD/FP and the AES/SHA crypto-extension instructions are not yet emulated, so a `.so` whose hot path is hardware-accelerated will hit an unsupported opcode. libapp.so (Flutter Dart AOT) is not executable here.',
     }));
   }
 
