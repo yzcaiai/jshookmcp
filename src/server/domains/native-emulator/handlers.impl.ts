@@ -62,6 +62,7 @@ export class NativeEmulatorHandlers {
         'neon-integer-simd',
         'call-exported-symbol',
         'call-jni-export',
+        'jni-object-array-iteration',
         'java-mock-callback',
         'java-mock-field',
         'apk-arm64-extract',

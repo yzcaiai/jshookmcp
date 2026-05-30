@@ -424,10 +424,17 @@ export class JniEnvironment {
     return BigInt(this.allocHandle({ kind: 'bytes', value: new Uint8Array(length) }));
   }
 
-  /** jsize GetArrayLength(JNIEnv*, jarray). */
+  /**
+   * jsize GetArrayLength(JNIEnv*, jarray). Works for both jbyteArray and any
+   * object array (String[]/Object[]) — a native loop like RootBeer's
+   * `for (i=0; i<GetArrayLength(paths); i++)` drives off this count, so an
+   * object array must report its real length, not 0.
+   */
   private jniGetArrayLength(ctx: HostContext): bigint {
     const value = this.handles.get(Number(ctx.x(1)));
-    return BigInt(isBytesValue(value) ? value.value.length : 0);
+    if (isBytesValue(value)) return BigInt(value.value.length);
+    if (isObjArrayValue(value)) return BigInt(value.value.length);
+    return 0n;
   }
 
   /** jbyte* GetByteArrayElements(JNIEnv*, jbyteArray, jboolean* isCopy). */
