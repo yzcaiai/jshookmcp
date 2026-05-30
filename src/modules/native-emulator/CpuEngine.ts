@@ -32,6 +32,21 @@ import type { BionicLibrary } from './bionic';
 import type { SimdContext } from './simd';
 import { executeSimdFp, executeSimdLoadStore } from './simd';
 
+/**
+ * A jump/call through a register holding 0 (BR/BLR to address 0). Carried as a
+ * distinct class so callers can tell a NULL indirect call apart from any other
+ * throw: the `callSymbol` path lets it propagate (the user invoked a function
+ * that dereferenced an uninitialised pointer — a real bug), while the
+ * constructor path tolerates it (a C++ static-ctor that wanders into a NULL
+ * call is an emulator-fidelity limit, not a reason to fail the whole load).
+ */
+export class NullIndirectCallError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NullIndirectCallError';
+  }
+}
+
 const EM_AARCH64 = 183;
 const MASK64 = (1n << 64n) - 1n;
 const MASK32 = (1n << 32n) - 1n;
@@ -134,6 +149,8 @@ export class CpuEngine {
   private importStubBump = IMPORT_STUB_BASE;
   /** Instruction observers (trace/breakpoint). Empty ⇒ hot loop pays nothing. */
   private readonly instructionHooks: InstructionHook[] = [];
+  /** NULL indirect calls swallowed while running .init_array constructors. */
+  private readonly constructorFaults: string[] = [];
   /** Set by exit/exit_group (or a host stub) to halt the run loop at once. */
   private stopRequested = false;
   /**
@@ -218,14 +235,30 @@ export class CpuEngine {
     for (const ctor of ctors) this.runConstructor(ctor);
   }
 
-  /** Invoke a constructor at `addr` with (argc=0, argv=NULL, envp=NULL), to return. */
+  /**
+   * Invoke a constructor at `addr` with (argc=0, argv=NULL, envp=NULL), to
+   * return. A constructor that wanders into a NULL indirect call is tolerated
+   * (recorded, not thrown): unlike a user-driven `callSymbol`, a static C++
+   * constructor reaching `BLR 0` here reflects emulator fidelity (some import or
+   * vtable slot the interpreter didn't fully model), and must not abort loading
+   * the whole library — a caller may only want an export that doesn't depend on
+   * that ctor. Other faults still propagate.
+   */
   private runConstructor(addr: number): void {
     this.gpr[0] = 0n;
     this.gpr[1] = 0n;
     this.gpr[2] = 0n;
     this.gpr[30] = BigInt(RETURN_SENTINEL); // LR → halt marker
     this.sp = BigInt(this.ensureStack());
-    this.run(addr, RETURN_SENTINEL);
+    try {
+      this.run(addr, RETURN_SENTINEL);
+    } catch (e) {
+      if (e instanceof NullIndirectCallError) {
+        this.constructorFaults.push(`ctor@0x${addr.toString(16)}: ${e.message}`);
+        return;
+      }
+      throw e;
+    }
   }
 
   /**
@@ -304,6 +337,16 @@ export class CpuEngine {
   /** List the exported dynamic symbol names callSymbol can resolve (from loadElf). */
   exportedSymbolNames(): string[] {
     return [...this.symbols.keys()];
+  }
+
+  /**
+   * NULL indirect calls (BR/BLR to 0) swallowed while running .init_array
+   * constructors during loadElf. A non-empty list means some static
+   * constructors didn't run to completion (an emulator-fidelity limit), which a
+   * caller can surface for diagnosis without it having aborted the load.
+   */
+  constructorFaultLog(): readonly string[] {
+    return this.constructorFaults;
   }
 
   /** Write a 64-bit value into a named register (x0..x30, sp, pc). */
@@ -822,6 +865,24 @@ export class CpuEngine {
   }
 
   /**
+   * Guard an indirect branch/call target (BR/BLR). callSymbol/runInitializers
+   * seed LR with the sentinel 0 so a genuine RET halts the run loop. A target of
+   * 0 here is therefore NOT a return — it is a jump/call through an
+   * uninitialised function pointer (a real-hardware SIGSEGV). Without this
+   * guard, PC=0 silently trips the loop's stop condition and the failure
+   * masquerades as a clean return — the exact effect that hid the STUR
+   * write-loss bug behind a fake "ran-to-return".
+   */
+  private assertIndirectTarget(target: number, kind: 'BR' | 'BLR'): void {
+    if (target === 0) {
+      throw new NullIndirectCallError(
+        `NULL indirect call: ${kind} to address 0 at pc=0x${this.pc.toString(16)} ` +
+          `(likely an uninitialised function pointer)`,
+      );
+    }
+  }
+
+  /**
    * Branches, Exception Generating and System (bits[28:25] = 101x): B, BL, RET,
    * BR, BLR, CBZ/CBNZ, B.cond, SVC. Returns true when handled.
    */
@@ -852,7 +913,9 @@ export class CpuEngine {
     // BR Rn: 1101011 0 0 00 11111 000000 Rn 00000  → PC = X[Rn] (indirect branch)
     if ((insn & 0xfffffc1f) >>> 0 === 0xd61f0000) {
       const rn = (insn >>> 5) & 0b11111;
-      this.pc = Number(this.readGpr(rn));
+      const target = Number(this.readGpr(rn));
+      this.assertIndirectTarget(target, 'BR');
+      this.pc = target;
       this.branched = true;
       return true;
     }
@@ -861,6 +924,7 @@ export class CpuEngine {
     if ((insn & 0xfffffc1f) >>> 0 === 0xd63f0000) {
       const rn = (insn >>> 5) & 0b11111;
       const target = Number(this.readGpr(rn));
+      this.assertIndirectTarget(target, 'BLR');
       this.gpr[30] = BigInt(this.pc + 4);
       this.pc = target;
       this.branched = true;

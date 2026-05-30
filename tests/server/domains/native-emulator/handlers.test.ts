@@ -180,10 +180,15 @@ describe('NativeEmulatorHandlers — happy path', () => {
     expect(features).toContain('neon-integer-simd');
     // Contiguous LD1/ST1 of multiple registers (NEON kernels stream rows with these).
     expect(features).toContain('simd-ld1-st1-multi');
+    // NULL indirect-call detection: a call through an uninitialised pointer throws
+    // rather than masquerading as a clean return (the failure mode that hid STUR).
+    expect(features).toContain('null-indirect-call-detection');
     expect(data.isa).toBe('aarch64-integer+neon+crypto+fp');
     // The remaining gap (LD2/3/4 + long/widening + saturating NEON) is declared, not hidden.
     expect(String(data.note)).toMatch(/NEON/);
     expect(String(data.note)).toMatch(/saturating|widening/);
+    // The NULL indirect-call guard is advertised in the note for AI/agent callers.
+    expect(String(data.note)).toMatch(/NULL indirect call/i);
   });
 
   it('creates a session and lists it', async () => {

@@ -65,6 +65,7 @@ export class NativeEmulatorHandlers {
         'neon-integer-simd',
         'call-exported-symbol',
         'call-jni-export',
+        'null-indirect-call-detection',
         'jni-object-array-iteration',
         'java-mock-callback',
         'java-mock-field',
@@ -73,7 +74,7 @@ export class NativeEmulatorHandlers {
       ],
       isa: 'aarch64-integer+neon+crypto+fp',
       activeSessions: this.sessions.count(),
-      note: 'In-process AArch64 interpreter: integer ISA (incl. DMB/DSB/ISB barriers as no-ops) + SIMD/FP load-store incl. contiguous LD1/ST1 of multiple registers + AES/SHA/PMULL crypto-extension (bit-exact vs FIPS-197/180-4/180-1) + scalar IEEE-754 floating-point (FADD/FMUL/FDIV/FSQRT/FCVT/FCMP/FCSEL, float32 via fround) + NEON integer-lane SIMD (three-same ADD/SUB/MUL/logical/compare/min-max, two-register-misc, DUP, MOVI/MVNI, shift-by-immediate, across-lanes reductions, ZIP/UZP/TRN, EXT, TBL/TBX). On load, DT_INIT + DT_INIT_ARRAY constructors run after relocation (like a real linker), so a `.so` with C++ static constructors initializes its globals before its API is called. Not yet emulated: the de-interleaving LD2/LD3/LD4 structures and the long/widening + saturating NEON variants (e.g. SQADD, SADDL); a `.so` relying on those hits an unsupported opcode (reported with the raw opcode). libapp.so (Flutter Dart AOT) is not executable here.',
+      note: 'In-process AArch64 interpreter: integer ISA (incl. DMB/DSB/ISB barriers as no-ops) + SIMD/FP load-store incl. contiguous LD1/ST1 of multiple registers + AES/SHA/PMULL crypto-extension (bit-exact vs FIPS-197/180-4/180-1) + scalar IEEE-754 floating-point (FADD/FMUL/FDIV/FSQRT/FCVT/FCMP/FCSEL, float32 via fround) + NEON integer-lane SIMD (three-same ADD/SUB/MUL/logical/compare/min-max, two-register-misc, DUP, MOVI/MVNI, shift-by-immediate, across-lanes reductions, ZIP/UZP/TRN, EXT, TBL/TBX). On load, DT_INIT + DT_INIT_ARRAY constructors run after relocation (like a real linker), so a `.so` with C++ static constructors initializes its globals before its API is called; a constructor that hits a NULL indirect call is tolerated (logged, load continues). A BR/BLR through a register holding 0 (a call/jump via an uninitialised function pointer — a real-hardware SIGSEGV) throws "NULL indirect call" from call_symbol/call_jni_export rather than silently halting as a fake return, so a failed emulation surfaces honestly instead of masquerading as success. Not yet emulated: the de-interleaving LD2/LD3/LD4 structures and the long/widening + saturating NEON variants (e.g. SQADD, SADDL); a `.so` relying on those hits an unsupported opcode (reported with the raw opcode). libapp.so (Flutter Dart AOT) is not executable here.',
     }));
   }
 
