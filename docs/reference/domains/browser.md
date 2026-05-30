@@ -21,11 +21,12 @@
 - browser + hooks
 - browser + workflow
 
-## 工具清单（63）
+## 工具清单（64）
 
 | 工具 | 说明 |
 | --- | --- |
 | `get_detailed_data` | 获取之前因数据量过大而被截断的完整内容。 |
+| `get_offloaded_data` | 待补充中文：Retrieve the original bytes of a field that was offloaded to disk (see the `_offload.path` in a placeholder). Returns base64 by default for binary blobs (e.g. decoded data: URIs); use encoding="utf8" for text. |
 | `browser_attach` | 通过 CDP 连接到一个正在运行的浏览器。 |
 | `browser_list_tabs` | 列出浏览器中所有打开的标签页。 |
 | `browser_list_cdp_targets` | 列出当前已连接浏览器目标可见的所有 CDP 目标。 |

@@ -15,6 +15,7 @@ export type ArtifactCategory =
   | 'reports'
   | 'har'
   | 'sessions'
+  | 'offloaded'
   | 'tmp';
 
 const ARTIFACT_BASE = 'artifacts';

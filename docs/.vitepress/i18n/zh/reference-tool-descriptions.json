@@ -436,5 +436,6 @@
   "nemu_new_byte_array": "将 base64 字节包装成 JNI jbyteArray 句柄，作为参数传入 call_jni_export（如签名例程要处理的明文）。返回该句柄。",
   "nemu_read_byte_array": "将 jbyteArray 句柄（如 native 调用的返回值）解析回字节，以 base64 加长度返回。",
   "nemu_trace": "调用一个导出符号，同时记录执行的每条指令（pc、操作码、步号），可选按步快照指定寄存器。受 maxSteps 限制。用于跟踪混淆 native 函数的控制流/算法。",
-  "nemu_setup_java_field": "待补充中文：Register a mock Java field the emulated native code reads back via JNI (GetFieldID/GetStaticFieldID + Get<Type>Field). Declaratively specify the value with valueInt, valueString, or valueBytes (base64) — the 'Java world' constant a native routine folds into its result. No code is executed."
+  "nemu_setup_java_field": "待补充中文：Register a mock Java field the emulated native code reads back via JNI (GetFieldID/GetStaticFieldID + Get<Type>Field). Declaratively specify the value with valueInt, valueString, or valueBytes (base64) — the 'Java world' constant a native routine folds into its result. No code is executed.",
+  "get_offloaded_data": "待补充中文：Retrieve the original bytes of a field that was offloaded to disk (see the `_offload.path` in a placeholder). Returns base64 by default for binary blobs (e.g. decoded data: URIs); use encoding=\"utf8\" for text."
 }

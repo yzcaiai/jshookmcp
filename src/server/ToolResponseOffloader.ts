@@ -21,6 +21,7 @@
  */
 
 import { DetailedDataManager } from '@utils/DetailedDataManager';
+import { sanitizeForCache, formatSize, DATA_URI_RE } from '@utils/sanitizeForCache';
 import { logger } from '@utils/logger';
 
 export interface OffloaderConfig {
@@ -48,7 +49,6 @@ interface OffloadPlaceholder {
   };
 }
 
-const DATA_URI_RE = /^data:([a-zA-Z0-9/+-]+);base64,/;
 const DETAILID_RE = /"_?offload"|detailId|_filePath/;
 
 export class LargeDataOffloader {
@@ -66,15 +66,6 @@ export class LargeDataOffloader {
   }
 
   /**
-   * Format byte count as human-readable string.
-   */
-  private formatSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes}B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-  }
-
-  /**
    * Store structured data in DetailedDataManager. Returns the placeholder.
    */
   private storeInDetailManager(data: unknown, _toolName: string, _idx: number): OffloadPlaceholder {
@@ -85,15 +76,28 @@ export class LargeDataOffloader {
     const size = entry?.size ?? 0;
 
     logger.info(
-      `[Offloader] Stored in DetailDataManager (${this.formatSize(size)}) → detailId=${detailId}`,
+      `[Offloader] Stored in DetailDataManager (${formatSize(size)}) → detailId=${detailId}`,
     );
     return {
       _offload: {
         type: 'detailId',
         detailId,
-        size: this.formatSize(size),
+        size: formatSize(size),
       },
     };
+  }
+
+  /**
+   * Detect a "detail wrapper" response shape — an object carrying a string
+   * `detailId` plus a `data` / `summary` / `preview` payload field. These come
+   * from get_detailed_data and similar tools; their payload may contain
+   * un-offloaded oversized fields that must be sanitized rather than skipped.
+   */
+  private isDetailWrapper(value: unknown): boolean {
+    if (typeof value !== 'object' || value === null) return false;
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.detailId !== 'string') return false;
+    return 'data' in obj || 'summary' in obj || 'preview' in obj;
   }
 
   /**
@@ -138,7 +142,24 @@ export class LargeDataOffloader {
       const text = record.text as string | undefined;
       if (typeof text !== 'string' || text.length < this.detailThreshold) continue;
 
-      // Skip if already offloaded
+      // ── Detail wrapper (e.g. get_detailed_data) → sanitize its data branch ──
+      // A response like { detailId, path, data } always carries a literal
+      // "detailId", so the old blunt DETAILID_RE skip let multi-MB blobs inside
+      // `data` escape unmodified (issue #62). Instead of skipping the whole
+      // entry, recursively offload oversized fields within it. This is
+      // defense-in-depth: the primary fix sanitizes at DetailedDataManager.store,
+      // but this also catches any future path that bypasses the cache.
+      const detailWrapper = this.tryParseJson(text);
+      if (detailWrapper !== null && this.isDetailWrapper(detailWrapper)) {
+        const sanitized = sanitizeForCache(detailWrapper);
+        if (sanitized !== detailWrapper) {
+          content[i] = { ...record, text: JSON.stringify(sanitized, null, 2) };
+          changed = true;
+        }
+        continue;
+      }
+
+      // Skip pure offload placeholders / file-reference responses (idempotent).
       if (DETAILID_RE.test(text)) continue;
 
       // ── Data URI (base64 image) → write binary file ──
@@ -156,7 +177,7 @@ export class LargeDataOffloader {
                 pending: true,
                 dataUriLength: text.length,
                 hint: `Use get_detailed_data() or read file after async offload completes`,
-                size: this.formatSize(text.length),
+                size: formatSize(text.length),
                 mimeType: text.match(DATA_URI_RE)?.[1] ?? 'application/octet-stream',
               },
             },
@@ -189,7 +210,7 @@ export class LargeDataOffloader {
                 type: 'file',
                 pending: true,
                 hint: 'Large raw string — use get_detailed_data() or await async offload',
-                size: this.formatSize(text.length),
+                size: formatSize(text.length),
               },
             },
             null,

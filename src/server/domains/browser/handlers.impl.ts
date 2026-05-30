@@ -710,6 +710,10 @@ export class BrowserToolHandlers {
     return this.detailedData.handleGetDetailedData(args);
   }
 
+  async handleGetOffloadedData(args: Record<string, unknown>) {
+    return this.detailedData.handleGetOffloadedData(args);
+  }
+
   // ── Camoufox Helpers ──
   private async handleCamoufoxLaunch(args: Record<string, unknown>) {
     return handleCamoufoxLaunchFlow(

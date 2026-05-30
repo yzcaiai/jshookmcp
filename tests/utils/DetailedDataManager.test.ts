@@ -173,4 +173,32 @@ describe('DetailedDataManager', () => {
     expect(stats[0]!.detailId).toBe(id1);
     expect(stats[1]!.detailId).toBe(id2);
   });
+
+  it('sanitizes data: URIs on store so retrieval never re-emits the blob (issue #62)', async () => {
+    const { getProjectRoot } = await import('@utils/outputPaths');
+    const { rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const manager = DetailedDataManager.getInstance();
+    // A data: URI is offloaded regardless of size; a small one keeps the test cheap.
+    const dataUri =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const id = manager.store([{ url: dataUri, method: 'GET', requestId: 'r1' }]);
+
+    const retrieved = manager.retrieve(id) as Array<{ url: { _offload?: { path?: string } } }>;
+    // The url field is now a structured placeholder, NOT a raw base64 string.
+    expect(retrieved[0]!.url).toHaveProperty('_offload');
+    expect(typeof retrieved[0]!.url).toBe('object');
+    expect(retrieved[0]!.url._offload).toMatchObject({ type: 'file', mimeType: 'image/png' });
+
+    // Clean up the offloaded file this test wrote to the real artifacts dir.
+    const path = retrieved[0]!.url._offload?.path;
+    if (path) await rm(join(getProjectRoot(), path), { force: true });
+  });
+
+  it('leaves normal payloads as the same value through store/retrieve (no-op path)', () => {
+    const manager = DetailedDataManager.getInstance();
+    const payload = { requests: [{ url: 'https://example.com', method: 'GET' }] };
+    const id = manager.store(payload);
+    expect(manager.retrieve(id)).toEqual(payload);
+  });
 });

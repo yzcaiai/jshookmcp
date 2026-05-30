@@ -21,11 +21,12 @@ Primary browser control and DOM interaction domain; the usual entry point for mo
 - browser + hooks
 - browser + workflow
 
-## Full tool list (63)
+## Full tool list (64)
 
 | Tool | Description |
 | --- | --- |
 | `get_detailed_data` | Retrieve large data by detailId. |
+| `get_offloaded_data` | Retrieve the original bytes of a field that was offloaded to disk (see the `_offload.path` in a placeholder). Returns base64 by default for binary blobs (e.g. decoded data: URIs); use encoding="utf8" for text. |
 | `browser_attach` | Connect to a running browser. |
 | `browser_list_tabs` | List open browser tabs with URLs and titles. |
 | `browser_list_cdp_targets` | List CDP targets with optional type/URL/title filters. |

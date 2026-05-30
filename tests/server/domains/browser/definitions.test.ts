@@ -164,6 +164,7 @@ describe('browser tool definitions', () => {
   describe('browserRuntimeTools', () => {
     const expectedNames = [
       'get_detailed_data',
+      'get_offloaded_data',
       'browser_launch',
       'camoufox_server',
       'browser_attach',
@@ -180,6 +181,14 @@ describe('browser tool definitions', () => {
       const schema = getInputSchema(tool);
       expect(schema.required).toContain('detailId');
       expect(schema.properties).toHaveProperty('path');
+    });
+
+    it('get_offloaded_data requires path and has encoding enum', async () => {
+      const tool = getToolByName(browserRuntimeTools, 'get_offloaded_data');
+      const schema = getInputSchema(tool);
+      expect(schema.required).toContain('path');
+      const encodingProp = getSchemaProperty<Record<string, unknown>>(tool, 'encoding');
+      expect(encodingProp.enum).toEqual(['base64', 'utf8']);
     });
 
     it('browser_launch has driver enum with chrome and camoufox', async () => {

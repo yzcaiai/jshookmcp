@@ -1,4 +1,5 @@
 import { logger } from '@utils/logger';
+import { sanitizeForCache } from '@utils/sanitizeForCache';
 import {
   DETAILED_DATA_DEFAULT_TTL_MS,
   DETAILED_DATA_MAX_TTL_MS,
@@ -155,23 +156,31 @@ export class DetailedDataManager {
       this.evictLRU();
     }
 
+    // CONTEXT SAFETY (issue #62): strip oversized fields (data: URIs, huge strings)
+    // to disk-backed placeholders BEFORE caching, so a later get_detailed_data
+    // retrieval can never re-emit multi-MB blobs into the LLM context window.
+    // sanitizeForCache returns the same reference when nothing needed offloading,
+    // so the common path stays a cheap no-op with no size recomputation.
+    const sanitized = sanitizeForCache(data);
+    const effectiveSize = sanitized === data ? size : this.serializeWithMemo(sanitized).size;
+
     const detailId = `detail_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     const now = Date.now();
     const ttl = customTTL || this.DEFAULT_TTL;
     const expiresAt = now + ttl;
 
     const entry: CacheEntry = {
-      data,
+      data: sanitized,
       expiresAt,
       createdAt: now,
       lastAccessedAt: now,
       accessCount: 0,
-      size,
+      size: effectiveSize,
     };
 
     this.cache.set(detailId, entry);
     logger.debug(
-      `Stored detailed data: ${detailId}, size: ${(size / 1024).toFixed(1)}KB, expires in ${ttl / 1000}s`,
+      `Stored detailed data: ${detailId}, size: ${(effectiveSize / 1024).toFixed(1)}KB, expires in ${ttl / 1000}s`,
     );
 
     return detailId;

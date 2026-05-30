@@ -10,6 +10,21 @@ export const browserRuntimeTools: Tool[] = [
       .required('detailId')
       .query(),
   ),
+  tool('get_offloaded_data', (t) =>
+    t
+      .desc(
+        'Retrieve the original bytes of a field that was offloaded to disk (see the ' +
+          '`_offload.path` in a placeholder). Returns base64 by default for binary blobs ' +
+          '(e.g. decoded data: URIs); use encoding="utf8" for text.',
+      )
+      .string(
+        'path',
+        'Project-relative path from an _offload placeholder (under artifacts/offloaded/)',
+      )
+      .enum('encoding', ['base64', 'utf8'], 'Output encoding', { default: 'base64' })
+      .required('path')
+      .query(),
+  ),
   tool('browser_launch', (t) =>
     t
       .desc('Launch Chromium/Camoufox or connect to a running browser.')

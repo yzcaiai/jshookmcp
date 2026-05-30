@@ -1,4 +1,5 @@
 import { DetailedDataManager } from '@utils/DetailedDataManager';
+import { sanitizeForCache } from '@utils/sanitizeForCache';
 import { DETAILED_DATA_SMART_THRESHOLD_BYTES } from '@src/constants';
 
 export interface SerializationContext {
@@ -115,7 +116,8 @@ export class AdaptiveDataSerializer {
 
   private serializeLargeArray(arr: unknown[], ctx: Required<SerializationContext>): string {
     if (arr.length <= ctx.maxArrayLength) {
-      return JSON.stringify(arr);
+      // Inline-only path: no store() backup, so preserve oversized fields to disk.
+      return JSON.stringify(sanitizeForCache(arr));
     }
 
     const sample = [...arr.slice(0, 5), ...arr.slice(-5)];
@@ -125,7 +127,8 @@ export class AdaptiveDataSerializer {
     return JSON.stringify({
       type: 'large-array',
       length: arr.length,
-      sample,
+      // Preview only — the full array is in the cache (sanitized), so no disk write here.
+      sample: sanitizeForCache(sample, { writeFile: false }),
       detailId,
       hint: `Use get_detailed_data("${detailId}") to get full array`,
     });
@@ -165,7 +168,8 @@ export class AdaptiveDataSerializer {
     }
 
     if (requests.length <= ctx.maxArrayLength) {
-      return JSON.stringify(requests);
+      // Inline-only path: no store() backup, so preserve oversized fields to disk.
+      return JSON.stringify(sanitizeForCache(requests));
     }
 
     const summary = requests.map((req) => {
@@ -184,7 +188,10 @@ export class AdaptiveDataSerializer {
     return JSON.stringify({
       type: 'network-requests',
       count: requests.length,
-      summary: summary.slice(0, ctx.maxArrayLength),
+      // Preview only — full requests are in the cache (sanitized). A data: URI in a
+      // url field would otherwise leak here verbatim (issue #62), so sanitize the
+      // summary too; no disk write since the canonical copy is already stored.
+      summary: sanitizeForCache(summary.slice(0, ctx.maxArrayLength), { writeFile: false }),
       detailId,
       hint: `Use get_detailed_data("${detailId}") to get full requests`,
     });

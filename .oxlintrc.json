@@ -47,6 +47,7 @@
           "_meta",
           "_nextStepHint",
           "_note",
+          "_offload",
           "_raw_summary",
           "_requestId",
           "_tabContext"

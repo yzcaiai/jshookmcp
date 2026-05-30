@@ -20,6 +20,7 @@ const registrations = defineMethodRegistrations<H, (typeof toolDefinitions)[numb
   lookup: t,
   entries: [
     { tool: 'get_detailed_data', method: 'handleGetDetailedData' },
+    { tool: 'get_offloaded_data', method: 'handleGetOffloadedData' },
     { tool: 'browser_attach', method: 'handleBrowserAttach' },
     { tool: 'browser_list_tabs', method: 'handleBrowserListTabs' },
     { tool: 'browser_list_cdp_targets', method: 'handleBrowserListCdpTargets' },

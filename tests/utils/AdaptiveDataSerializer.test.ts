@@ -106,6 +106,44 @@ describe('AdaptiveDataSerializer', () => {
     expect(serializer.serialize(smallNetwork)).toBe(JSON.stringify(smallNetwork));
   });
 
+  it('sanitizes data: URIs in the network-requests summary so they do not leak (issue #62)', () => {
+    const dataUri = 'data:image/png;base64,' + 'Z'.repeat(200 * 1024);
+    const requests = Array.from({ length: 12 }, (_, i) => ({
+      requestId: `r${i}`,
+      url: i === 0 ? dataUri : `https://example.com/${i}`,
+      method: 'GET',
+      type: 'xhr',
+      timestamp: i,
+    }));
+    const output = JSON.parse(serializer.serialize(requests)) as {
+      type: string;
+      summary: Array<{ url: unknown }>;
+    };
+
+    expect(output.type).toBe('network-requests');
+    // The data: URI url is replaced with a compact placeholder (no disk write here).
+    expect(output.summary[0]!.url).toHaveProperty('_offload');
+    // The 200KB bulk does not appear anywhere in the serialized summary.
+    expect(JSON.stringify(output.summary)).not.toContain('Z'.repeat(500));
+    // Normal urls are untouched.
+    expect(output.summary[1]!.url).toBe('https://example.com/1');
+  });
+
+  it('sanitizes data: URIs in small inline network arrays (no detailId backup)', async () => {
+    const { getProjectRoot } = await import('@utils/outputPaths');
+    const { rm } = await import('node:fs/promises');
+    const { join } = await import('node:path');
+    const dataUri = 'data:image/png;base64,' + 'Q'.repeat(200 * 1024);
+    const small = [{ requestId: '1', url: dataUri, method: 'GET' }];
+    const out = JSON.parse(serializer.serialize(small)) as Array<{
+      url: { _offload?: { path?: string } };
+    }>;
+    expect(out[0]!.url).toHaveProperty('_offload');
+    // Inline path preserves the original to disk (only copy) — clean it up.
+    const path = out[0]!.url._offload?.path;
+    if (path) await rm(join(getProjectRoot(), path), { force: true });
+  });
+
   it('serializes custom AST representations (DOM and Function Trees)', () => {
     const dom = { tagName: 'DIV', childNodes: [] };
     expect(serializer.serialize(dom)).toBe(JSON.stringify(dom));

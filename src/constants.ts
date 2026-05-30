@@ -552,6 +552,13 @@ export const DETAILED_DATA_SMART_THRESHOLD_BYTES = int(
   'DETAILED_DATA_SMART_THRESHOLD_BYTES',
   50 * 1024,
 );
+// Per-field cache sanitization: strings larger than this (bytes) are offloaded to disk
+// and replaced with a compact placeholder before entering DetailedDataManager. data: URIs
+// are always offloaded regardless of size (base64 is meaningless to an LLM). See issue #62.
+export const OFFLOAD_FIELD_SANITIZE_THRESHOLD_BYTES = int(
+  'OFFLOAD_FIELD_SANITIZE_THRESHOLD_BYTES',
+  64 * 1024,
+);
 
 // ── MEDIUM — LLM parameters ──
 
