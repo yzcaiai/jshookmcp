@@ -80,6 +80,7 @@ export class DetailedDataManager {
   private persistDir: string;
   private metadataPath: string;
   private persistenceEnabled = true;
+  private disposed = false;
 
   private readonly DEFAULT_TTL = DETAILED_DATA_DEFAULT_TTL_MS;
   private readonly MAX_TTL = DETAILED_DATA_MAX_TTL_MS;
@@ -127,6 +128,7 @@ export class DetailedDataManager {
   }
 
   shutdown(): void {
+    this.disposed = true;
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
@@ -134,15 +136,17 @@ export class DetailedDataManager {
     this.cache.clear();
     // Reset singleton so next getInstance() creates a fresh instance with interval
     DetailedDataManager.instance = undefined;
-    logger.info('DetailedDataManager shut down');
   }
 
   private async init(): Promise<void> {
     try {
       await fs.mkdir(this.persistDir, { recursive: true });
+      if (this.disposed) return;
       await this.loadPersistedEntries();
+      if (this.disposed) return;
       await this.cleanupExpired();
     } catch (error) {
+      if (this.disposed) return;
       logger.warn('Failed to initialize persistence, falling back to memory-only', error);
       this.persistenceEnabled = false;
     }
@@ -151,10 +155,12 @@ export class DetailedDataManager {
   private async loadPersistedEntries(): Promise<void> {
     try {
       const content = await fs.readFile(this.metadataPath, 'utf-8');
+      if (this.disposed) return;
       const lines = content.trim().split('\n').filter(Boolean);
       const now = Date.now();
 
       for (const line of lines) {
+        if (this.disposed) return;
         const meta: PersistedMetadata = JSON.parse(line);
         if (meta.expiresAt > now) {
           this.cache.set(meta.detailId, {
@@ -172,15 +178,16 @@ export class DetailedDataManager {
           });
         }
       }
-      logger.info(`Loaded ${this.cache.size} persisted detail entries`);
+      if (!this.disposed) logger.info(`Loaded ${this.cache.size} persisted detail entries`);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if (!this.disposed && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
         logger.warn('Failed to load persisted metadata', error);
       }
     }
   }
 
   private async cleanupExpired(): Promise<void> {
+    if (this.disposed) return;
     if (!this.persistenceEnabled) return;
 
     const now = Date.now();
@@ -191,6 +198,7 @@ export class DetailedDataManager {
         expired.push(detailId);
         if (entry.persistPath) {
           await fs.unlink(entry.persistPath).catch(() => {});
+          if (this.disposed) return;
         }
       }
     }
@@ -198,11 +206,12 @@ export class DetailedDataManager {
     if (expired.length > 0) {
       expired.forEach((id) => this.cache.delete(id));
       await this.rebuildMetadata();
-      logger.info(`Cleaned up ${expired.length} expired detail entries`);
+      if (!this.disposed) logger.info(`Cleaned up ${expired.length} expired detail entries`);
     }
   }
 
   private async rebuildMetadata(): Promise<void> {
+    if (this.disposed) return;
     if (!this.persistenceEnabled) return;
 
     const lines: string[] = [];
@@ -218,7 +227,9 @@ export class DetailedDataManager {
       }
     }
 
-    await fs.writeFile(this.metadataPath, lines.join('\n') + '\n').catch(() => {});
+    if (!this.disposed) {
+      await fs.writeFile(this.metadataPath, lines.join('\n') + '\n').catch(() => {});
+    }
   }
 
   /**

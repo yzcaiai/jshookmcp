@@ -1,8 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 import { rmSync } from 'node:fs';
 import { LargeDataOffloader } from '@server/ToolResponseOffloader';
-import { DetailedDataManager } from '@utils/DetailedDataManager';
-import { logger, type LogLevel } from '@utils/logger';
+import type { DetailedDataManager } from '@utils/DetailedDataManager';
 import { getOffloadDir } from '@utils/sanitizeForCache';
 
 function textResponse(obj: unknown) {
@@ -13,20 +12,18 @@ function textResponse(obj: unknown) {
 
 describe('LargeDataOffloader — issue #62 structural detection', () => {
   const offloadDir = getOffloadDir();
-  const originalLogLevel = (process.env.LOG_LEVEL as LogLevel | undefined) ?? 'info';
 
-  beforeAll(() => {
-    logger.setLevel('error');
-  });
+  function createOffloader(): LargeDataOffloader {
+    return new LargeDataOffloader({} as unknown as DetailedDataManager);
+  }
 
   afterAll(() => {
-    logger.setLevel(originalLogLevel);
     // Best-effort cleanup of any files written by these tests.
     rmSync(offloadDir, { recursive: true, force: true });
   });
 
   it('sanitizes a data: URI nested in a get_detailed_data wrapper instead of skipping it', () => {
-    const offloader = new LargeDataOffloader(new DetailedDataManager());
+    const offloader = createOffloader();
     const dataUri = 'data:image/png;base64,' + 'A'.repeat(2 * 1024 * 1024);
     const response = textResponse({
       success: true,
@@ -47,7 +44,7 @@ describe('LargeDataOffloader — issue #62 structural detection', () => {
   });
 
   it('still skips a pure offload placeholder response (idempotent)', () => {
-    const offloader = new LargeDataOffloader(new DetailedDataManager());
+    const offloader = createOffloader();
     // A response that is already an offload placeholder padded over the threshold.
     const placeholder = {
       _offload: { type: 'file', path: 'artifacts/offloaded/x.bin', size: '2.0MB' },
@@ -64,7 +61,7 @@ describe('LargeDataOffloader — issue #62 structural detection', () => {
   });
 
   it('leaves small responses untouched', () => {
-    const offloader = new LargeDataOffloader(new DetailedDataManager());
+    const offloader = createOffloader();
     const response = textResponse({ success: true, detailId: 'd1', data: { ok: true } });
     const before = (response.content[0] as { text: string }).text;
 
