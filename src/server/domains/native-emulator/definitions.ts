@@ -162,4 +162,26 @@ export const nativeEmulatorTools: Tool[] = [
       .number('maxSteps', 'Maximum trace events to return (default: 1000)', { default: 1000 })
       .required('sessionId', 'symbol'),
   ),
+  tool('nemu_disassemble', (t) =>
+    t
+      .desc(
+        'Disassemble a single instruction without creating an emulator session. Supports arm64/aarch64, x86, x64, riscv32/riscv64, mips/mips32, and mipsel. This is a local lightweight decoder for trace readability, including common SSE/AVX/AVX2/AVX-512 EVEX, RISC-V, and MIPS instructions.',
+      )
+      .enum(
+        'architecture',
+        ['arm64', 'aarch64', 'x86', 'x64', 'riscv32', 'riscv64', 'mips', 'mips32', 'mipsel'],
+        'Instruction architecture / ISA mode',
+        { default: 'arm64' },
+      )
+      .prop('opcode', {
+        anyOf: [{ type: 'string' }, { type: 'number' }],
+        description:
+          'Instruction opcode as a number, a 0x-prefixed hex string, or hex bytes separated by spaces (e.g. "62 f1 74 48 58 c2").',
+      })
+      .string('pc', 'Program counter used for relative target formatting, as decimal or 0x hex', {
+        default: '0x0',
+      })
+      .required('architecture', 'opcode')
+      .query(),
+  ),
 ];

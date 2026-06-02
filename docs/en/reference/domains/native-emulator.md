@@ -20,7 +20,7 @@ In-process, dependency-free self-built ARM64 interpreter for emulating Android `
 - native-emulator + binary-instrument
 - native-emulator + dart-inspector
 
-## Full tool list (15)
+## Full tool list (16)
 
 | Tool | Description |
 | --- | --- |
@@ -39,3 +39,4 @@ In-process, dependency-free self-built ARM64 interpreter for emulating Android `
 | `nemu_new_byte_array` | Wrap base64 bytes as a JNI jbyteArray handle to pass as an argument into call_jni_export (e.g. the plaintext a signing routine consumes). Returns the handle. |
 | `nemu_read_byte_array` | Resolve a jbyteArray handle (e.g. a native call's return value) back to its bytes, returned as base64 plus length. |
 | `nemu_trace` | Invoke an exported symbol while recording every instruction executed (pc, opcode, step), optionally snapshotting named registers per step. Bounded by maxSteps. Use to follow the control flow / algorithm of an obfuscated native function. |
+| `nemu_disassemble` | Disassemble a single instruction without creating an emulator session. Supports arm64/aarch64, x86, x64, riscv32/riscv64, mips/mips32, and mipsel. This is a local lightweight decoder for trace readability, including common SSE/AVX/AVX2/AVX-512 EVEX, RISC-V, and MIPS instructions. |

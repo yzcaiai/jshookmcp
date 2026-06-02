@@ -66,7 +66,7 @@ The built-in surface below is generated from the runtime registry and checked in
 
 <!-- metadata-sync:start -->
 - Package version: `0.3.2`
-- Built-in Tools: `439`
+- Built-in Tools: `440`
 - Domains: `adb-bridge`, `binary-instrument`, `boringssl-inspector`, `browser`, `canvas`, `coordination`, `core`, `cross-domain`, `dart-inspector`, `debugger`, `encoding`, `extension-registry`, `graphql`, `instrumentation`, `maintenance`, `memory`, `mojo-ipc`, `native-emulator`, `network`, `platform`, `process`, `protocol-analysis`, `proxy`, `sourcemap`, `streaming`, `syscall-hook`, `trace`, `transform`, `v8-inspector`, `wasm`, `workflow`
 - Note: this snapshot is generated from the runtime registry; do not edit the counts by hand.
 <!-- metadata-sync:end -->

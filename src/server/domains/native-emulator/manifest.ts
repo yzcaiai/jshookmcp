@@ -27,6 +27,7 @@ const registrations = defineMethodRegistrations<H, (typeof nativeEmulatorTools)[
     { tool: 'nemu_new_byte_array', method: 'handleNewByteArray' },
     { tool: 'nemu_read_byte_array', method: 'handleReadByteArray' },
     { tool: 'nemu_trace', method: 'handleTrace' },
+    { tool: 'nemu_disassemble', method: 'handleDisassemble' },
   ],
 });
 
@@ -66,6 +67,7 @@ const manifest = {
       'nemu_setup_java_mock',
       'nemu_call_jni_export',
       'nemu_trace',
+      'nemu_disassemble',
     ],
     hint: 'In-process ARM64 emulation: create a session → load a .so (or extract one from an APK) → register mock Java methods → call exported / Java_* JNI functions → optionally trace instructions. Destroy the session when done.',
   },

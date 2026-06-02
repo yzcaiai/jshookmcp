@@ -43,6 +43,7 @@ describe('native-emulator manifest', () => {
     const registeredNames = manifest.registrations.map((r) => r.tool.name).toSorted();
     const definedNames = nativeEmulatorTools.map((t) => t.name).toSorted();
     expect(registeredNames).toEqual(definedNames);
+    expect(registeredNames).toContain('nemu_disassemble');
   });
 
   it('every tool name carries the nemu_ prefix', () => {

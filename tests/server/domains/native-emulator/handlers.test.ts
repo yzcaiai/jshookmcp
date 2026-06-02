@@ -150,6 +150,21 @@ describe('NativeEmulatorHandlers — happy path', () => {
     expect(data.available).toBe(true);
   });
 
+  it('disassembles a single instruction without creating a session', async () => {
+    handlers = new NativeEmulatorHandlers();
+    const data = payload(
+      await handlers.handleDisassemble({
+        architecture: 'x64',
+        opcode: '62 f1 74 48 58 c2',
+        pc: '0x1000',
+      }),
+    );
+    expect(data.success).toBe(true);
+    expect(data.normalizedArchitecture).toBe('x64');
+    expect(String(data.asm)).toContain('vaddps');
+    expect(String(data.asm)).toContain('zmm');
+  });
+
   it('advertises the post-Phase-F feature set and an honest ISA boundary', async () => {
     handlers = new NativeEmulatorHandlers();
     const data = payload(await handlers.handleCapabilities({}));

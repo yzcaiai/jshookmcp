@@ -20,7 +20,7 @@
 - native-emulator + binary-instrument
 - native-emulator + dart-inspector
 
-## 工具清单（15）
+## 工具清单（16）
 
 | 工具 | 说明 |
 | --- | --- |
@@ -39,3 +39,4 @@
 | `nemu_new_byte_array` | 将 base64 字节包装成 JNI jbyteArray 句柄，作为参数传入 call_jni_export（如签名例程要处理的明文）。返回该句柄。 |
 | `nemu_read_byte_array` | 将 jbyteArray 句柄（如 native 调用的返回值）解析回字节，以 base64 加长度返回。 |
 | `nemu_trace` | 调用一个导出符号，同时记录执行的每条指令（pc、操作码、步号），可选按步快照指定寄存器。受 maxSteps 限制。用于跟踪混淆 native 函数的控制流/算法。 |
+| `nemu_disassemble` | 待补充中文：Disassemble a single instruction without creating an emulator session. Supports arm64/aarch64, x86, x64, riscv32/riscv64, mips/mips32, and mipsel. This is a local lightweight decoder for trace readability, including common SSE/AVX/AVX2/AVX-512 EVEX, RISC-V, and MIPS instructions. |

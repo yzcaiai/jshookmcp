@@ -19,7 +19,14 @@ import type { JavaMethodCall } from '@modules/native-emulator/jni';
 import type { TraceEvent } from '@modules/native-emulator/CpuEngine';
 import { handleSafe } from '@server/domains/shared/ResponseBuilder';
 import {
+  disassembleInstruction,
+  normalizeDisasmArchitecture,
+  SUPPORTED_DISASSEMBLY_ARCHITECTURES,
+  type OpcodeInput,
+} from '@modules/native-emulator/disasm';
+import {
   argBool,
+  argEnum,
   argNumber,
   argNumberArray,
   argString,
@@ -30,6 +37,7 @@ import type { ToolArgs, ToolResponse } from '@server/types';
 
 /** Cap on instruction-trace events returned, regardless of requested maxSteps. */
 const TRACE_HARD_CAP = 100_000;
+const DISASM_ARCHITECTURES = new Set(SUPPORTED_DISASSEMBLY_ARCHITECTURES);
 
 export class NativeEmulatorHandlers {
   private readonly sessions: SessionManager;
@@ -288,6 +296,22 @@ export class NativeEmulatorHandlers {
     });
   }
 
+  handleDisassemble(args: ToolArgs): Promise<ToolResponse> {
+    return handleSafe(async () => {
+      const architecture = argEnum(args, 'architecture', DISASM_ARCHITECTURES, 'arm64');
+      const opcode = parseOpcodeInput(args['opcode']);
+      const pc = parseProgramCounter(argString(args, 'pc', '0x0'));
+      const asm = disassembleInstruction(architecture, opcode, pc);
+      return {
+        architecture,
+        normalizedArchitecture: normalizeDisasmArchitecture(architecture),
+        opcode: formatOpcodeInput(opcode),
+        pc: `0x${pc.toString(16)}`,
+        asm,
+      };
+    });
+  }
+
   /** Forwarded by the graceful-shutdown closables list. Idempotent. */
   dispose(): void {
     this.sessions.dispose();
@@ -303,12 +327,57 @@ function toUint8(buf: Uint8Array): Uint8Array {
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
+function parseOpcodeInput(value: unknown): OpcodeInput {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error('opcode number must be a finite unsigned integer');
+    }
+    return Math.trunc(value) >>> 0;
+  }
+
+  if (typeof value !== 'string') {
+    throw new Error('Missing required opcode argument');
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error('opcode must not be empty');
+
+  if (/^(?:0x)?[0-9a-f]+$/i.test(trimmed) && trimmed.replace(/^0x/i, '').length > 2) {
+    return Number.parseInt(trimmed.replace(/^0x/i, ''), 16) >>> 0;
+  }
+
+  const parts = trimmed.replace(/,/g, ' ').split(/\s+/).filter(Boolean);
+  const bytes = parts.map((part) => {
+    const hex = part.replace(/^0x/i, '');
+    if (!/^[0-9a-f]{1,2}$/i.test(hex)) {
+      throw new Error(`Invalid opcode byte: ${part}`);
+    }
+    return Number.parseInt(hex, 16);
+  });
+  if (bytes.length === 0) throw new Error('opcode must include at least one byte');
+  return bytes;
+}
+
+function parseProgramCounter(value: string): bigint {
+  const trimmed = value.trim();
+  if (!trimmed) return 0n;
+  if (/^0x[0-9a-f]+$/i.test(trimmed)) return BigInt(trimmed);
+  if (/^\d+$/.test(trimmed)) return BigInt(trimmed);
+  throw new Error(`Invalid pc: ${value}`);
+}
+
+function formatOpcodeInput(opcode: OpcodeInput): string {
+  if (typeof opcode === 'number') return `0x${opcode.toString(16)}`;
+  return Array.from(opcode, (byte) => byte.toString(16).padStart(2, '0')).join(' ');
+}
+
 /** Build a trace row: pc/opcode/step, plus any requested register snapshots. */
 function traceRow(ev: TraceEvent, captureRegisters: string[]): Record<string, unknown> {
   const row: Record<string, unknown> = {
     step: ev.step,
     pc: `0x${ev.pc.toString(16)}`,
     insn: `0x${ev.insn.toString(16).padStart(8, '0')}`,
+    asm: disassembleInstruction('arm64', ev.insn, BigInt(ev.pc)),
   };
   if (captureRegisters.length > 0) {
     const regs: Record<string, number> = {};
