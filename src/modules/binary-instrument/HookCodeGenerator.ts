@@ -147,9 +147,9 @@ export class HookCodeGenerator {
       case 'rsa':
         return 'RSA crypto hook for key operation tracing';
       case 'base64':
-        return 'Base64 transform hook for encoded payload tracing';
+        return 'Base64 transform hook for encoded data tracing';
       case 'network':
-        return 'Network hook for request and payload tracing';
+        return 'Network hook for request and response body tracing';
       case 'file-io':
         return 'File I/O hook for filesystem access tracing';
       case 'string':

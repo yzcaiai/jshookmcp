@@ -308,13 +308,13 @@ export class FridaSession {
   }
 
   private parseModuleList(output: string): FridaModuleInfo[] {
-    const payload = this.extractJsonPayload(output);
-    if (!Array.isArray(payload)) {
+    const data = this.extractJsonData(output);
+    if (!Array.isArray(data)) {
       return [];
     }
 
     const modules: FridaModuleInfo[] = [];
-    for (const entry of payload) {
+    for (const entry of data) {
       if (!this.isRecord(entry)) {
         continue;
       }
@@ -335,13 +335,13 @@ export class FridaSession {
   }
 
   private parseFunctionList(output: string): FridaFunctionInfo[] {
-    const payload = this.extractJsonPayload(output);
-    if (!Array.isArray(payload)) {
+    const data = this.extractJsonData(output);
+    if (!Array.isArray(data)) {
       return [];
     }
 
     const functions: FridaFunctionInfo[] = [];
-    for (const entry of payload) {
+    for (const entry of data) {
       if (!this.isRecord(entry)) {
         continue;
       }
@@ -361,13 +361,13 @@ export class FridaSession {
   }
 
   private parseSymbolList(output: string): FridaSymbolInfo[] {
-    const payload = this.extractJsonPayload(output);
-    if (!Array.isArray(payload)) {
+    const data = this.extractJsonData(output);
+    if (!Array.isArray(data)) {
       return [];
     }
 
     const symbols: FridaSymbolInfo[] = [];
-    for (const entry of payload) {
+    for (const entry of data) {
       if (!this.isRecord(entry)) {
         continue;
       }
@@ -390,7 +390,7 @@ export class FridaSession {
     return symbols;
   }
 
-  private extractJsonPayload(output: string): unknown {
+  private extractJsonData(output: string): unknown {
     const candidates = output
       .split(/\r?\n/)
       .map((line) => line.trim())

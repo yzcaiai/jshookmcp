@@ -1,7 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { access } from 'node:fs/promises';
-import { logger } from '@utils/logger';
 import { UNIDBG_TIMEOUT_MS } from '@src/constants';
 import { ToolError } from '@errors/ToolError';
 import { PrerequisiteError } from '@errors/PrerequisiteError';
@@ -89,22 +88,8 @@ export class UnidbgRunner {
 
       return { sessionId, soPath, arch };
     } catch (error) {
-      // If subprocess fails, still register a session for graceful degradation
       const message = error instanceof Error ? error.message : String(error);
-      logger.warn('[binary-instrument] Unidbg launch failed, registering stub session', {
-        soPath,
-        message,
-      });
-
-      const session: UnidbgSession = {
-        id: sessionId,
-        soPath,
-        arch,
-        startedAt: new Date().toISOString(),
-      };
-      this.sessions.set(sessionId, session);
-
-      return { sessionId, soPath, arch };
+      throw new ToolError('RUNTIME', `Unidbg launch failed: ${message}`);
     }
   }
 
@@ -120,17 +105,9 @@ export class UnidbgRunner {
 
     const jarPath = process.env['UNIDBG_JAR'];
     if (!jarPath) {
-      // Graceful degradation: return structured result without real emulation
-      return {
-        sessionId,
-        functionName,
-        args,
-        returnValue: '0x0',
-        stdout: '',
-        stderr: '',
-        trace: ['mock-unidbg-unavailable'],
-        _note: 'Unidbg emulation requires UNIDBG_JAR to be configured',
-      };
+      throw new PrerequisiteError(
+        'UNIDBG_JAR is not configured. Set the UNIDBG_JAR env var before calling Unidbg.',
+      );
     }
 
     const command = this.getJavaCommand();
@@ -158,15 +135,7 @@ export class UnidbgRunner {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return {
-        sessionId,
-        functionName,
-        args,
-        returnValue: '0x0',
-        stdout: '',
-        stderr: message,
-        trace: ['error'],
-      };
+      throw new ToolError('RUNTIME', `Unidbg call failed: ${message}`);
     }
   }
 
@@ -178,11 +147,9 @@ export class UnidbgRunner {
 
     const jarPath = process.env['UNIDBG_JAR'];
     if (!jarPath) {
-      return {
-        sessionId,
-        trace: ['mock-unidbg-unavailable'],
-        _note: 'Unidbg tracing requires UNIDBG_JAR to be configured',
-      };
+      throw new PrerequisiteError(
+        'UNIDBG_JAR is not configured. Set the UNIDBG_JAR env var before tracing Unidbg.',
+      );
     }
 
     const command = this.getJavaCommand();
@@ -197,11 +164,7 @@ export class UnidbgRunner {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return {
-        sessionId,
-        trace: ['error'],
-        error: message,
-      };
+      throw new ToolError('RUNTIME', `Unidbg trace failed: ${message}`);
     }
   }
 
