@@ -8,7 +8,14 @@ import {
 } from '@modules/process/memory/types';
 import { nativeMemoryManager } from '@native/NativeMemoryManager';
 import { isKoffiAvailable } from '@native/NativeMemoryManager.utils';
-import { MEMORY_VMMAP_ENUM_TIMEOUT_MS, MEMORY_MODULES_TIMEOUT_MS } from '@src/constants';
+import {
+  MEMORY_ENUM_REGIONS_MAX_BUFFER_BYTES,
+  MEMORY_ENUM_REGIONS_RETURN_LIMIT,
+  MEMORY_MODULES_TIMEOUT_MS,
+  MEMORY_SCAN_MAX_REGIONS,
+  MEMORY_VMMAP_ENUM_TIMEOUT_MS,
+  MEMORY_VMMAP_MAX_BUFFER_BYTES,
+} from '@src/constants';
 import { parseProcMaps, formatLinuxProtection } from './linux/mapsParser';
 
 interface DarwinMemoryRegion {
@@ -96,7 +103,7 @@ public class RegionEnumerator {
                     type = info.Type == 0x1000000 ? "IMAGE" : (info.Type == 0x40000 ? "MAPPED" : "PRIVATE")
                 });
 
-                if (regions.Count >= 10000 || scannedRegions >= 50000) break;
+                if (regions.Count >= ${MEMORY_ENUM_REGIONS_RETURN_LIMIT} || scannedRegions >= ${MEMORY_SCAN_MAX_REGIONS}) break;
                 long baseAddr = info.BaseAddress.ToInt64();
                 long regionSize = info.RegionSize.ToInt64();
                 if (regionSize <= 0) break;
@@ -174,7 +181,7 @@ export async function enumerateRegions(
     try {
       const { stdout } = await execAsync(`vmmap -v ${pid}`, {
         timeout: MEMORY_VMMAP_ENUM_TIMEOUT_MS,
-        maxBuffer: 1024 * 1024 * 5,
+        maxBuffer: MEMORY_VMMAP_MAX_BUFFER_BYTES,
       });
       const regions: DarwinMemoryRegion[] = [];
       const regionRe = /^(\S[^\t]*?)\s{2,}([0-9a-f]+)-([0-9a-f]+)\s+\[.*?\]\s+([a-z-]+)\/([a-z-]+)/;
@@ -231,7 +238,7 @@ export async function enumerateRegions(
   try {
     const psScript = buildEnumerateRegionsScript(pid);
     const { stdout } = await executePowerShellScript(psScript, {
-      maxBuffer: 1024 * 1024 * 10,
+      maxBuffer: MEMORY_ENUM_REGIONS_MAX_BUFFER_BYTES,
       timeout: MEMORY_MODULES_TIMEOUT_MS,
     });
 

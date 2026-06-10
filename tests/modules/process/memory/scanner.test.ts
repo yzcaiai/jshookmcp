@@ -84,6 +84,11 @@ import {
   scanMemory,
   scanMemoryFiltered,
 } from '@modules/process/memory/scanner';
+import {
+  MEMORY_SCAN_MAX_REGIONS,
+  MEMORY_SCAN_MAX_RESULTS,
+  MEMORY_SCAN_REGION_MAX_BYTES,
+} from '@src/constants';
 
 describe('memory/scanner', () => {
   beforeEach(() => {
@@ -126,6 +131,12 @@ describe('memory/scanner', () => {
     expect(result.success).toBe(true);
     expect(result.addresses).toEqual(['0x100', '0x200']);
     expect(result.stats?.resultsFound).toBe(2);
+    const script = state.executePowerShellScript.mock.calls[0]?.[0] as string;
+    expect(script).toContain(`regionSize > ${MEMORY_SCAN_REGION_MAX_BYTES}`);
+    expect(script).toContain(`scannedRegions >= ${MEMORY_SCAN_MAX_REGIONS}`);
+    expect(script).toContain(
+      `ScanMemory(2, $patternBytes, $maskBytes, ${MEMORY_SCAN_MAX_RESULTS})`,
+    );
   });
 
   it('scanMemory(win32) returns stderr failure when PowerShell reports error', async () => {

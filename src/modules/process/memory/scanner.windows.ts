@@ -5,7 +5,13 @@ import { logger } from '@utils/logger';
 import { executePowerShellScript, type MemoryScanResult } from '@modules/process/memory/types';
 import { nativeMemoryManager } from '@native/NativeMemoryManager';
 import { isKoffiAvailable } from '@native/NativeMemoryManager.utils';
-import { MEMORY_SCAN_TIMEOUT_MS, MEMORY_SCAN_MAX_BUFFER_BYTES } from '@src/constants';
+import {
+  MEMORY_SCAN_MAX_BUFFER_BYTES,
+  MEMORY_SCAN_MAX_REGIONS,
+  MEMORY_SCAN_MAX_RESULTS,
+  MEMORY_SCAN_REGION_MAX_BYTES,
+  MEMORY_SCAN_TIMEOUT_MS,
+} from '@src/constants';
 import type { PatternType } from '@modules/process/memory/types';
 import { buildPatternBytesAndMask } from './scanner.patterns';
 
@@ -55,7 +61,7 @@ public class MemoryScanner {
     const uint PAGE_EXECUTE_READ = 0x20;
     const uint PAGE_EXECUTE_READWRITE = 0x40;
 
-    public static List<string> ScanMemory(int pid, byte[] pattern, byte[] mask, int maxResults = 10000) {
+    public static List<string> ScanMemory(int pid, byte[] pattern, byte[] mask, int maxResults = ${MEMORY_SCAN_MAX_RESULTS}) {
         var results = new List<string>();
         IntPtr hProcess = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, false, pid);
         if (hProcess == IntPtr.Zero) {
@@ -80,7 +86,7 @@ public class MemoryScanner {
 
                 if (isReadable && info.RegionSize.ToInt64() > 0 && info.RegionSize.ToInt64() < 1073741824) {
                     long regionSize = info.RegionSize.ToInt64();
-                    if (regionSize > 16777216) regionSize = 16777216; // bound scan window per region (16MB)
+                    if (regionSize > ${MEMORY_SCAN_REGION_MAX_BYTES}) regionSize = ${MEMORY_SCAN_REGION_MAX_BYTES};
                     byte[] buffer = new byte[(int)regionSize];
                     int bytesRead;
 
@@ -96,7 +102,7 @@ public class MemoryScanner {
                 }
 
                 if (results.Count >= maxResults) break;
-                if (scannedRegions >= 50000) break;
+                if (scannedRegions >= ${MEMORY_SCAN_MAX_REGIONS}) break;
                 long baseAddr = info.BaseAddress.ToInt64();
                 long regionSizeRaw = info.RegionSize.ToInt64();
                 if (regionSizeRaw <= 0) break;
@@ -126,7 +132,7 @@ public class MemoryScanner {
 try {
     $patternBytes = @(${patternArray})
     $maskBytes = @(${maskArray})
-    $results = [MemoryScanner]::ScanMemory(${pid}, $patternBytes, $maskBytes, 1000)
+    $results = [MemoryScanner]::ScanMemory(${pid}, $patternBytes, $maskBytes, ${MEMORY_SCAN_MAX_RESULTS})
     @{
         success = $true;
         addresses = $results;

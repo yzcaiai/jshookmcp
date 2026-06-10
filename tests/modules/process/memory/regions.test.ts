@@ -46,6 +46,13 @@ import {
   checkMemoryProtection,
   enumerateModules,
 } from '@modules/process/memory/regions';
+import {
+  MEMORY_ENUM_REGIONS_MAX_BUFFER_BYTES,
+  MEMORY_ENUM_REGIONS_RETURN_LIMIT,
+  MEMORY_SCAN_MAX_REGIONS,
+  MEMORY_VMMAP_ENUM_TIMEOUT_MS,
+  MEMORY_VMMAP_MAX_BUFFER_BYTES,
+} from '@src/constants';
 
 describe('memory/regions', () => {
   beforeEach(() => {
@@ -90,6 +97,10 @@ describe('memory/regions', () => {
     expect(result.success).toBe(true);
     expect(result.regions).toHaveLength(1);
     expect(result.regions?.[0]?.baseAddress).toBe('0x0000000100000000');
+    expect(state.execAsync).toHaveBeenCalledWith('vmmap -v 3', {
+      timeout: MEMORY_VMMAP_ENUM_TIMEOUT_MS,
+      maxBuffer: MEMORY_VMMAP_MAX_BUFFER_BYTES,
+    });
     // DarwinMemoryRegion has isWritable property
     expect((result.regions?.[0] as { isWritable: boolean })?.isWritable).toBe(true);
   });
@@ -135,6 +146,11 @@ describe('memory/regions', () => {
       baseAddress: '0x1000',
       protection: 'rw-',
     });
+    const script = state.executePowerShellScript.mock.calls[0]?.[0] as string;
+    const options = state.executePowerShellScript.mock.calls[0]?.[1] as { maxBuffer: number };
+    expect(script).toContain(`regions.Count >= ${MEMORY_ENUM_REGIONS_RETURN_LIMIT}`);
+    expect(script).toContain(`scannedRegions >= ${MEMORY_SCAN_MAX_REGIONS}`);
+    expect(options.maxBuffer).toBe(MEMORY_ENUM_REGIONS_MAX_BUFFER_BYTES);
   });
 
   it('checkMemoryProtection falls back to PowerShell on Windows and surfaces silent output errors', async () => {
