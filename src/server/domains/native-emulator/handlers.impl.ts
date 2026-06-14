@@ -167,6 +167,41 @@ export class NativeEmulatorHandlers {
     });
   }
 
+  handleLoadLibraryChain(args: ToolArgs): Promise<ToolResponse> {
+    return handleSafe(async () => {
+      const session = this.requireSession(args);
+      const dependencyPaths = argStringArray(args, 'dependencyPaths') ?? [];
+      const primaryPath = argStringRequired(args, 'primaryPath');
+
+      if (dependencyPaths.length === 0) {
+        throw new Error('dependencyPaths must contain at least one dependency .so path');
+      }
+
+      // Read all dependency bytes
+      const depBytes: Uint8Array[] = [];
+      for (const depPath of dependencyPaths) {
+        const bytes = await readFile(depPath);
+        depBytes.push(toUint8(bytes));
+      }
+
+      // Read primary bytes
+      const primaryBytes = toUint8(await readFile(primaryPath));
+
+      // Load chain
+      const loaded = session.emulator.loadLibraryChain(depBytes, primaryBytes);
+
+      return {
+        sessionId: session.id,
+        dependencyPaths,
+        primaryPath,
+        entry: loaded.entry,
+        unresolvedImports: loaded.unresolvedImports,
+        constructorFaults: loaded.constructorFaults,
+        symbols: session.emulator.engine.exportedSymbolNames(),
+      };
+    });
+  }
+
   handleExtractApkLibs(args: ToolArgs): Promise<ToolResponse> {
     return handleSafe(async () => {
       const apkPath = argStringRequired(args, 'apkPath');

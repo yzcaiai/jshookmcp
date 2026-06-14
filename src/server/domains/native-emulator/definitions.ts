@@ -50,6 +50,20 @@ export const nativeEmulatorTools: Tool[] = [
       .string('soPath', 'Filesystem path to the .so library')
       .required('sessionId', 'soPath'),
   ),
+  tool('nemu_load_library_chain', (t) =>
+    t
+      .desc(
+        'Load a chain of dependent libraries into a session, resolving inter-library imports. Pass dependency .so paths as dependencyPaths (loaded first in order), then the primary .so path. Each dependency exports are visible to the primary and later dependencies. Use this for FFmpeg-style multi-library loads where libijkplayer.so calls exports from libijkffmpeg.so and libijksdl.so.',
+      )
+      .string('sessionId', 'Session identifier')
+      .array(
+        'dependencyPaths',
+        'Filesystem paths to dependency .so files (loaded in order)',
+        'string',
+      )
+      .string('primaryPath', 'Filesystem path to the primary .so library')
+      .required('sessionId', 'dependencyPaths', 'primaryPath'),
+  ),
   tool('nemu_inspect_imports', (t) =>
     t
       .desc(
