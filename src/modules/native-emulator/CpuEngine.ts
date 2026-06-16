@@ -651,7 +651,12 @@ export class CpuEngine implements ExecutionContext {
 
   /** Read the 16 bytes of V register `reg` (copy, safe to mutate). */
   readVReg(reg: number): Uint8Array {
-    return Uint8Array.from(this.registerFile.getVectorBytes(reg) ?? new Uint8Array(16));
+    const bytes = this.registerFile.getVectorBytes(reg);
+    if (!bytes) return new Uint8Array(16);
+    // Return a copy to prevent external modification, but preserve .buffer property
+    const copy = new Uint8Array(16);
+    copy.set(bytes);
+    return copy;
   }
 
   /** Overwrite V register `reg`; shorter input is zero-padded, longer truncated. */
@@ -752,6 +757,7 @@ export class CpuEngine implements ExecutionContext {
       },
       conditionHolds: (cond) => this.conditionHolds(cond),
       getPc: () => this.registerFile.pc,
+      setQC: () => this.setQC(),
     };
   }
 
@@ -1026,6 +1032,15 @@ export class CpuEngine implements ExecutionContext {
    */
   setFPSR(value: number): void {
     this.fpContext.setFPSR(value);
+  }
+
+  /**
+   * Set the QC (cumulative saturation) flag in FPSR (bit 27).
+   * Used by NEON saturating instructions to indicate overflow/underflow.
+   */
+  setQC(): void {
+    const currentFPSR = this.fpContext.getFPSR();
+    this.fpContext.setFPSR(currentFPSR | (1 << 27));
   }
 
   // ── FP Operations (for test exposure and future instruction decode) ──

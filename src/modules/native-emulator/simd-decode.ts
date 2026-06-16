@@ -146,6 +146,14 @@ export const isNeonThreeSame = (f: SimdFields): boolean =>
   ((f.insn >>> 10) & 1) === 1;
 
 /**
+ * NEON three different (widening/narrowing/long): 0 Q U 01110 size 1 Rm opcode[15:12] 00 Rn Rd.
+ * Covers SADDL/UADDL/SSUBL/USUBL/SMULL/UMULL/SMLAL/UMLAL/SADDW/UADDW/SSUBW/USUBW/
+ * SADDLP/UADDLP/SXTL/UXTL and their 2 (high-half) variants.
+ */
+export const isNeonThreeDifferent = (f: SimdFields): boolean =>
+  ((f.insn >>> 31) & 1) === 0 && f.base28_24 === 0b01110 && f.bit21 === 1 && f.low11_10 === 0b00;
+
+/**
  * NEON two-register miscellaneous: 0 Q U 01110 size 10000 opcode[16:12] 10 Rn Rd.
  * Covers NEG/ABS/NOT/CNT/CLZ/REV16/REV32/REV64 per-lane transforms.
  */

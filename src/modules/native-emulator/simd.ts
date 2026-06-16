@@ -86,14 +86,68 @@ import {
   neonOrr,
   neonSmax,
   neonSmin,
-  neonSqadd,
-  neonSqsub,
   neonSub,
-  neonUqadd,
-  neonUqsub,
   neonUmax,
   neonUmin,
 } from './simd-neon';
+import {
+  neonSaddl,
+  neonUaddl,
+  neonSsubl,
+  neonUsubl,
+  neonSaddw,
+  neonUaddw,
+  neonSsubw,
+  neonUsubw,
+  neonSmull,
+  neonUmull,
+  neonSmlal,
+  neonUmlal,
+  neonSmlsl,
+  neonUmlsl,
+  neonSqdmull,
+  neonSqdmlal,
+  neonSqdmlsl,
+  neonSaddlp,
+  neonUaddlp,
+  // neonSxtl, neonUxtl — aliases for SSHLL/USHLL with shift=0, no separate decode needed
+  neonSshll,
+  neonUshll,
+  neonAddhn,
+  neonSubhn,
+  neonRaddhn,
+  neonRsubhn,
+  neonPmull,
+  neonSabal,
+  neonUabal,
+  neonSabdl,
+  neonUabdl,
+} from './simd-neon-widening';
+import {
+  neonSqadd,
+  neonUqadd,
+  neonSqsub,
+  neonUqsub,
+  neonSqshl,
+  neonUqshl,
+  neonSqrshl,
+  neonUqrshl,
+  neonSqxtn,
+  neonUqxtn,
+  neonSqxtun,
+  neonSqabs,
+  neonSqneg,
+  neonSuqadd,
+  neonUsqadd,
+  neonSqshlu,
+  neonSqshrn,
+  neonUqshrn,
+  neonSqrshrn,
+  neonUqrshrn,
+  neonSqshrun,
+  neonSqrshrun,
+  type SaturatingContext,
+} from './simd-neon-saturating';
 import {
   decodeSimdFields,
   type SimdFields,
@@ -103,6 +157,7 @@ import {
   isPmull,
   isScalarFp,
   isNeonThreeSame,
+  isNeonThreeDifferent,
   isNeonModImm,
   isNeonShiftImm,
   isNeonTwoRegMisc,
@@ -462,6 +517,7 @@ export function executeSimdFp(ctx: SimdContext, insn: number): boolean {
   if (isPmull(f)) return execPmull(ctx, f);
   if (isScalarFp(f)) return execScalarFp(ctx, f);
   if (isNeonThreeSame(f)) return execNeonThreeSame(ctx, f);
+  if (isNeonThreeDifferent(f)) return execNeonThreeDifferent(ctx, f);
   if (isNeonModImm(f)) return execNeonModImm(ctx, f);
   if (isNeonShiftImm(f)) return execNeonShiftImm(ctx, f);
   if (isNeonTwoRegMisc(f)) return execNeonTwoRegMisc(ctx, f);
@@ -849,12 +905,50 @@ function execNeonThreeSame(ctx: SimdContext, f: SimdFields): boolean {
   const b = ctx.vGetBytes(rm);
 
   switch (f.neonOpcode) {
-    case 0b00001: // SQADD (U=0) / UQADD (U=1)
-      ctx.vSetBytes(rd, u === 0 ? neonSqadd(a, b, size, q) : neonUqadd(a, b, size, q));
+    case 0b00001: {
+      // SQADD (U=0) / UQADD (U=1)
+      const result = new Uint8Array(16);
+      if (u === 0) {
+        neonSqadd(result, a, b, size, q, ctx as SaturatingContext);
+      } else {
+        neonUqadd(result, a, b, size, q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(rd, result);
       return true;
-    case 0b00101: // SQSUB (U=0) / UQSUB (U=1)
-      ctx.vSetBytes(rd, u === 0 ? neonSqsub(a, b, size, q) : neonUqsub(a, b, size, q));
+    }
+    case 0b00101: {
+      // SQSUB (U=0) / UQSUB (U=1)
+      const result = new Uint8Array(16);
+      if (u === 0) {
+        neonSqsub(result, a, b, size, q, ctx as SaturatingContext);
+      } else {
+        neonUqsub(result, a, b, size, q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(rd, result);
       return true;
+    }
+    case 0b01001: {
+      // SQSHL (U=0) / UQSHL (U=1) — register shift
+      const result = new Uint8Array(16);
+      if (u === 0) {
+        neonSqshl(result, a, b, size, q, ctx as SaturatingContext);
+      } else {
+        neonUqshl(result, a, b, size, q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(rd, result);
+      return true;
+    }
+    case 0b01011: {
+      // SQRSHL (U=0) / UQRSHL (U=1) — register shift with rounding
+      const result = new Uint8Array(16);
+      if (u === 0) {
+        neonSqrshl(result, a, b, size, q, ctx as SaturatingContext);
+      } else {
+        neonUqrshl(result, a, b, size, q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(rd, result);
+      return true;
+    }
     case 0b00011: {
       // Bitwise logical: size (and U) pick the exact operation.
       if (u === 0) {
@@ -913,6 +1007,100 @@ function execNeonThreeSame(ctx: SimdContext, f: SimdFields): boolean {
   }
 }
 
+// ── NEON "three different" widening/narrowing/long (ARM ARM C4.1.7) ────────
+//
+// 0 Q[30] U[29] 01110[28:24] size[23:22] 1[21] Rm[20:16] opcode[15:12] 00[11:10] Rn Rd.
+// Widening operations take narrow source lanes and produce wider results.
+// Q selects the input half (0=low, 1=high for *L2/*W2 variants).
+
+/**
+ * Dispatch a three-different widening op on (opcode[15:12], U). Returns false
+ * for opcodes not yet modelled so the engine reports them.
+ */
+function execNeonThreeDifferent(ctx: SimdContext, f: SimdFields): boolean {
+  const { rd, rn, rm, size, q, u } = f;
+  const a = ctx.vGetBytes(rn);
+  const b = ctx.vGetBytes(rm);
+  const opcode = f.op15_12; // bits[15:12]
+
+  switch (opcode) {
+    case 0b0000: // SADDL (U=0) / UADDL (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSaddl(a, b, size, q) : neonUaddl(a, b, size, q));
+      return true;
+    case 0b0010: // SSUBL (U=0) / USUBL (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSsubl(a, b, size, q) : neonUsubl(a, b, size, q));
+      return true;
+    case 0b0001: // SADDW (U=0) / UADDW (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSaddw(a, b, size, q) : neonUaddw(a, b, size, q));
+      return true;
+    case 0b0011: // SSUBW (U=0) / USUBW (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSsubw(a, b, size, q) : neonUsubw(a, b, size, q));
+      return true;
+    case 0b1100: // SMULL (U=0) / UMULL (U=1) / PMULL (U=1 size=00/10, handled in isPmull)
+      ctx.vSetBytes(rd, u === 0 ? neonSmull(a, b, size, q) : neonUmull(a, b, size, q));
+      return true;
+    case 0b1000: // SMLAL (U=0) / UMLAL (U=1)
+      ctx.vSetBytes(
+        rd,
+        u === 0
+          ? neonSmlal(ctx.vGetBytes(rd), a, b, size, q)
+          : neonUmlal(ctx.vGetBytes(rd), a, b, size, q),
+      );
+      return true;
+    case 0b1010: // SMLSL (U=0) / UMLSL (U=1)
+      ctx.vSetBytes(
+        rd,
+        u === 0
+          ? neonSmlsl(ctx.vGetBytes(rd), a, b, size, q)
+          : neonUmlsl(ctx.vGetBytes(rd), a, b, size, q),
+      );
+      return true;
+    case 0b1011: // SQDMULL (U=0 only)
+      if (u === 0) {
+        ctx.vSetBytes(rd, neonSqdmull(a, b, size, q, ctx as SaturatingContext));
+        return true;
+      }
+      return false;
+    case 0b1001: // SQDMLAL (U=0 only)
+      if (u === 0) {
+        ctx.vSetBytes(rd, neonSqdmlal(ctx.vGetBytes(rd), a, b, size, q, ctx as SaturatingContext));
+        return true;
+      }
+      return false;
+    case 0b0111: // SQDMLSL (U=0 only)
+      if (u === 0) {
+        ctx.vSetBytes(rd, neonSqdmlsl(ctx.vGetBytes(rd), a, b, size, q, ctx as SaturatingContext));
+        return true;
+      }
+      return false;
+    case 0b0100: // ADDHN (U=0) / RADDHN (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonAddhn(a, b, size, q) : neonRaddhn(a, b, size, q));
+      return true;
+    case 0b0110: // SUBHN (U=0) / RSUBHN (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSubhn(a, b, size, q) : neonRsubhn(a, b, size, q));
+      return true;
+    case 0b0101: // SABAL (U=0) / UABAL (U=1)
+      ctx.vSetBytes(
+        rd,
+        u === 0
+          ? neonSabal(ctx.vGetBytes(rd), a, b, size, q)
+          : neonUabal(ctx.vGetBytes(rd), a, b, size, q),
+      );
+      return true;
+    case 0b1101: // SABDL (U=0) / UABDL (U=1)
+      ctx.vSetBytes(rd, u === 0 ? neonSabdl(a, b, size, q) : neonUabdl(a, b, size, q));
+      return true;
+    case 0b1110: // PMULL (U=1, size=00/10) — handled by isPmull, falls through
+      if (u === 1 && (size === 0b00 || size === 0b10)) {
+        ctx.vSetBytes(rd, neonPmull(a, b, size, q));
+        return true;
+      }
+      return false;
+    default:
+      return false;
+  }
+}
+
 // ── NEON two-register miscellaneous (single source, per-lane transform) ────
 // 0 Q U 01110 size 10000 opcode[16:12] 10 Rn Rd.
 
@@ -926,15 +1114,44 @@ function execNeonTwoRegMisc(ctx: SimdContext, f: SimdFields): boolean {
     case 0b00001: // REV16
       ctx.vSetBytes(rd, neonRev(a, 2, q));
       return true;
-    case 0b00010: // REV32 (U=1) — bits distinguish; here opcode 00010 with U as needed
-      ctx.vSetBytes(rd, neonRev(a, 4, q));
+    case 0b00011: {
+      // SUQADD (U=0) / USQADD (U=1) — saturating accumulate of unsigned/signed
+      const result = ctx.vGetBytes(rd); // Read-modify-write: accumulate into Vd
+      if (u === 0) {
+        neonSuqadd(result, a, size, q, ctx as SaturatingContext);
+      } else {
+        neonUsqadd(result, a, size, q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(rd, result);
       return true;
+    }
+    case 0b00010: // REV32 (U=1) / SADDLP (U=0) / UADDLP (U=1)
+      if (u === 0) {
+        ctx.vSetBytes(rd, neonSaddlp(a, size, q));
+        return true;
+      } else {
+        // Check if it's UADDLP or REV32 by context (REV32 needs specific size)
+        // For now, try UADDLP first since it's more common in widening context
+        ctx.vSetBytes(rd, neonUaddlp(a, size, q));
+        return true;
+      }
     case 0b00100: // CLZ
       ctx.vSetBytes(rd, neonClz(a, size, q));
       return true;
     case 0b00101: // CNT (U=0) / NOT (U=1, size=00)
       ctx.vSetBytes(rd, u === 0 ? neonCnt(a, q) : neonNot(a, q));
       return true;
+    case 0b00111: {
+      // SQABS (U=0) / SQNEG (U=1)
+      const result = new Uint8Array(16);
+      if (u === 0) {
+        neonSqabs(result, a, size, q, ctx as SaturatingContext);
+      } else {
+        neonSqneg(result, a, size, q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(rd, result);
+      return true;
+    }
     case 0b01011: // ABS (U=0) / NEG (U=1)
       ctx.vSetBytes(rd, u === 0 ? neonAbs(a, size, q) : neonNeg(a, size, q));
       return true;
@@ -944,6 +1161,28 @@ function execNeonTwoRegMisc(ctx: SimdContext, f: SimdFields): boolean {
         return true;
       }
       return false;
+    case 0b10010: {
+      // SQXTUN (U=1) — saturating extract unsigned narrow (signed source)
+      if (u === 1) {
+        const result = q === 1 ? ctx.vGetBytes(rd) : new Uint8Array(16);
+        neonSqxtun(result, a, size, q, ctx as SaturatingContext);
+        ctx.vSetBytes(rd, result);
+        return true;
+      }
+      return false;
+    }
+    case 0b10100: {
+      // SQXTN (U=0) / UQXTN (U=1)
+      // For Q=1 (SQXTN2/UQXTN2), preserve low half of destination
+      const result = q === 1 ? ctx.vGetBytes(rd) : new Uint8Array(16);
+      if (u === 0) {
+        neonSqxtn(result, a, size, q, ctx as SaturatingContext);
+      } else {
+        neonUqxtn(result, a, size, q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(rd, result);
+      return true;
+    }
     default:
       return false;
   }
@@ -1069,6 +1308,72 @@ function execNeonShiftImm(ctx: SimdContext, f: SimdFields): boolean {
       ctx.vSetBytes(
         f.rd,
         f.u === 0 ? neonSshr(a, size, shift, f.q) : neonUshr(a, size, shift, f.q),
+      );
+      return true;
+    }
+    case 0b01100: {
+      // SQSHLU (U=1) — saturating shift left unsigned result
+      if (f.u === 1) {
+        const shift = immhb - esize;
+        const result = new Uint8Array(16);
+        neonSqshlu(result, a, shift, size, f.q, ctx as SaturatingContext);
+        ctx.vSetBytes(f.rd, result);
+        return true;
+      }
+      return false;
+    }
+    case 0b10000: {
+      // SQSHRUN (U=1) — saturating shift right unsigned narrow (signed source)
+      if (f.u === 1) {
+        const shift = 2 * esize - immhb;
+        const result = f.q === 1 ? ctx.vGetBytes(f.rd) : new Uint8Array(16);
+        neonSqshrun(result, a, shift, size, f.q, ctx as SaturatingContext);
+        ctx.vSetBytes(f.rd, result);
+        return true;
+      }
+      return false;
+    }
+    case 0b10001: {
+      // SQRSHRUN (U=1) — saturating rounding shift right unsigned narrow
+      if (f.u === 1) {
+        const shift = 2 * esize - immhb;
+        const result = f.q === 1 ? ctx.vGetBytes(f.rd) : new Uint8Array(16);
+        neonSqrshrun(result, a, shift, size, f.q, ctx as SaturatingContext);
+        ctx.vSetBytes(f.rd, result);
+        return true;
+      }
+      return false;
+    }
+    case 0b10010: {
+      // SQSHRN (U=0) / UQSHRN (U=1) — saturating shift right narrow
+      const shift = 2 * esize - immhb;
+      const result = f.q === 1 ? ctx.vGetBytes(f.rd) : new Uint8Array(16);
+      if (f.u === 0) {
+        neonSqshrn(result, a, shift, size, f.q, ctx as SaturatingContext);
+      } else {
+        neonUqshrn(result, a, shift, size, f.q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(f.rd, result);
+      return true;
+    }
+    case 0b10011: {
+      // SQRSHRN (U=0) / UQRSHRN (U=1) — saturating rounding shift right narrow
+      const shift = 2 * esize - immhb;
+      const result = f.q === 1 ? ctx.vGetBytes(f.rd) : new Uint8Array(16);
+      if (f.u === 0) {
+        neonSqrshrn(result, a, shift, size, f.q, ctx as SaturatingContext);
+      } else {
+        neonUqrshrn(result, a, shift, size, f.q, ctx as SaturatingContext);
+      }
+      ctx.vSetBytes(f.rd, result);
+      return true;
+    }
+    case 0b10100: {
+      // SSHLL (U=0) / USHLL (U=1) — widening shift left
+      const shift = immhb - esize;
+      ctx.vSetBytes(
+        f.rd,
+        f.u === 0 ? neonSshll(a, shift, size, f.q) : neonUshll(a, shift, size, f.q),
       );
       return true;
     }

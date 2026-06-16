@@ -508,10 +508,13 @@ export function neonSqxtn(
 ): void {
   if (size >= 3) throw new Error('SQXTN: invalid size (must be 0-2)');
 
-  const laneCount = 8 >> size;
+  // Narrowing behavior depends on Q:
+  // Q=0 (SQXTN): read ALL wide lanes from 128 bits, write to low 64 bits
+  // Q=1 (SQXTN2): read 64 bits of wide lanes, write to high 64 bits (preserving low)
   const inputSize = size + 1;
+  const laneCount = q === 0 ? 16 >> inputSize : 8 >> inputSize;
   const outputBits = 8 << size;
-  const offset = q === 1 ? laneCount : 0;
+  const offset = q === 1 ? laneCount : 0; // Destination offset in narrow lanes
 
   for (let i = 0; i < laneCount; i++) {
     const wide = readLaneSigned(vn, i, inputSize);
@@ -533,10 +536,13 @@ export function neonUqxtn(
 ): void {
   if (size >= 3) throw new Error('UQXTN: invalid size (must be 0-2)');
 
-  const laneCount = 8 >> size;
+  // Narrowing behavior depends on Q:
+  // Q=0 (UQXTN): read ALL wide lanes from 128 bits, write to low 64 bits
+  // Q=1 (UQXTN2): read 64 bits of wide lanes, write to high 64 bits (preserving low)
   const inputSize = size + 1;
+  const laneCount = q === 0 ? 16 >> inputSize : 8 >> inputSize;
   const outputBits = 8 << size;
-  const offset = q === 1 ? laneCount : 0;
+  const offset = q === 1 ? laneCount : 0; // Destination offset in narrow lanes
 
   for (let i = 0; i < laneCount; i++) {
     const wide = readLaneUnsigned(vn, i, inputSize);
