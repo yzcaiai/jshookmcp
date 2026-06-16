@@ -37,6 +37,7 @@ import { applyShift, extendReg } from './utils/ShiftExtend';
 import { RegisterFile } from './cpu/RegisterFile';
 import { MemoryManager } from './cpu/MemoryManager';
 import type { ExecutionContext } from './cpu/ExecutionContext';
+import { FpContext } from './fp/FpOperations';
 
 const MASK64 = (1n << 64n) - 1n;
 import {
@@ -161,6 +162,8 @@ export type InstructionHook = (event: TraceEvent) => void;
 export class CpuEngine implements ExecutionContext {
   private readonly registerFile = new RegisterFile();
   private readonly memory = new MemoryManager();
+  /** FP exception context (FPCR/FPSR) for IEEE754 compliance. */
+  private readonly fpContext = new FpContext();
   /** Set by branch instructions so the run loop skips its default PC increment. */
   private branched = false;
   /** Host-function stubs keyed by guest address (libc imports, etc.). */
@@ -990,4 +993,115 @@ export class CpuEngine implements ExecutionContext {
   }
 
   // ── End ExecutionContext Implementation ──
+
+  // ── FP Exception Handling (Phase 1.1) ──
+
+  /**
+   * Read FPCR (Floating-Point Control Register).
+   * Controls rounding mode, trap enables, flush-to-zero, etc.
+   */
+  getFPCR(): number {
+    return this.fpContext.getFPCR();
+  }
+
+  /**
+   * Write FPCR to configure FP behavior.
+   * @param value - New FPCR value (typically set by MSR instruction)
+   */
+  setFPCR(value: number): void {
+    this.fpContext.setFPCR(value);
+  }
+
+  /**
+   * Read FPSR (Floating-Point Status Register).
+   * Contains cumulative exception flags (IOC, DZC, OFC, UFC, IXC, IDC).
+   */
+  getFPSR(): number {
+    return this.fpContext.getFPSR();
+  }
+
+  /**
+   * Write FPSR (typically to clear cumulative flags).
+   * @param value - New FPSR value
+   */
+  setFPSR(value: number): void {
+    this.fpContext.setFPSR(value);
+  }
+
+  // ── FP Operations (for test exposure and future instruction decode) ──
+
+  /**
+   * FADD: Floating-point addition with exception handling.
+   * @param a - First operand
+   * @param b - Second operand
+   * @param is32bit - True for float32 (S reg), false for float64 (D reg)
+   */
+  fadd(a: number, b: number, is32bit = false): number {
+    return this.fpContext.fadd(a, b, is32bit);
+  }
+
+  /**
+   * FSUB: Floating-point subtraction with exception handling.
+   */
+  fsub(a: number, b: number, is32bit = false): number {
+    return this.fpContext.fsub(a, b, is32bit);
+  }
+
+  /**
+   * FMUL: Floating-point multiplication with exception handling.
+   */
+  fmul(a: number, b: number, is32bit = false): number {
+    return this.fpContext.fmul(a, b, is32bit);
+  }
+
+  /**
+   * FDIV: Floating-point division with exception handling.
+   */
+  fdiv(a: number, b: number, is32bit = false): number {
+    return this.fpContext.fdiv(a, b, is32bit);
+  }
+
+  /**
+   * FSQRT: Floating-point square root with exception handling.
+   */
+  fsqrt(a: number, is32bit = false): number {
+    return this.fpContext.fsqrt(a, is32bit);
+  }
+
+  /**
+   * Float32 variant of FMUL (convenience for tests).
+   */
+  fmul32(a: number, b: number): number {
+    return this.fpContext.fmul32(a, b);
+  }
+
+  // ── Rounding helpers (for test exposure) ──
+
+  /**
+   * Round to nearest integer, ties to even (IEEE754 default).
+   */
+  roundTiesToEven(value: number): number {
+    return this.fpContext.roundTiesToEven(value);
+  }
+
+  /**
+   * Round toward +Infinity.
+   */
+  roundTowardPlusInf(value: number): number {
+    return this.fpContext.roundTowardPlusInf(value);
+  }
+
+  /**
+   * Round toward -Infinity.
+   */
+  roundTowardMinusInf(value: number): number {
+    return this.fpContext.roundTowardMinusInf(value);
+  }
+
+  /**
+   * Round toward zero (truncate).
+   */
+  roundTowardZero(value: number): number {
+    return this.fpContext.roundTowardZero(value);
+  }
 }
