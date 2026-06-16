@@ -12,7 +12,7 @@
  * Optimizations: Fast path + fully inlined slow path (zero function call overhead).
  */
 
-import { detectInexact, type FpExceptionFlags } from './FpExceptions';
+import { detectInexact, detectInputDenormal, type FpExceptionFlags } from './FpExceptions';
 import {
   RoundingMode,
   roundToInt,
@@ -179,36 +179,6 @@ export class FpContext {
     return is32bit ? QNAN_F32 : QNAN_F64;
   }
 
-  /**
-   * Apply overflow rounding mode adjustment.
-   * RN/RP/RM modes return ±Inf; RZ mode returns ±max_normal.
-   */
-  private handleOverflow(sign: number, is32bit: boolean): number {
-    const mode = this.getRoundingMode();
-    const max = is32bit ? FLOAT32_MAX : FLOAT64_MAX;
-
-    if (mode === RoundingMode.RZ) {
-      // Round toward zero: saturate to max_normal
-      const result = sign < 0 ? -max : max;
-      return is32bit ? Math.fround(result) : result;
-    }
-
-    // RN/RP/RM modes: return ±Infinity
-    return sign < 0 ? -Infinity : Infinity;
-  }
-
-  /**
-   * Apply underflow handling (flush to zero if FZ=1).
-   */
-  private handleUnderflow(value: number): number {
-    if (this.isFlushToZero()) {
-      // Preserve sign
-      return Object.is(value, -0) || value < 0 ? -0 : 0;
-    }
-    // FZ=0: return denormal as-is (JS supports denormals natively)
-    return value;
-  }
-
   // ── Core FP Arithmetic Operations ──
 
   /**
@@ -359,8 +329,13 @@ export class FpContext {
         this.fpsr |= 1 << FPSR_IOC;
       } else if (!Number.isFinite(result)) {
         this.fpsr |= 1 << FPSR_OFC;
+      } else if (result !== 0 && !Object.is(result, -0)) {
+        // UFC check: result is denormal (underflow)
+        const minNormal = is32bit ? FLOAT32_MIN_NORMAL : FLOAT64_MIN_NORMAL;
+        if (Math.abs(result) < minNormal) {
+          this.fpsr |= 1 << FPSR_UFC;
+        }
       }
-      // Skip UFC check in fast path for performance
       return result;
     }
 
@@ -454,15 +429,20 @@ export class FpContext {
     let result = a / b;
     if (is32bit) result = Math.fround(result);
 
-    // Fast path: minimal exception detection (skip IXC for performance)
+    // Fast path: minimal exception detection (with IXC heuristic)
     if (this.fastPath) {
       // Only check NaN and Inf
       if (Number.isNaN(result)) {
         this.fpsr |= 1 << FPSR_IOC;
       } else if (!Number.isFinite(result)) {
         this.fpsr |= 1 << FPSR_DZC;
+      } else if (result !== 0 && Number.isFinite(result)) {
+        // IXC heuristic: divisor is not a power of 2 → likely inexact
+        const log2b = Math.log2(Math.abs(b));
+        if (!Number.isInteger(log2b)) {
+          this.fpsr |= 1 << FPSR_IXC;
+        }
       }
-      // Skip IXC check in fast path for performance
       return result;
     }
 
@@ -547,12 +527,16 @@ export class FpContext {
     let result = Math.sqrt(a);
     if (is32bit) result = Math.fround(result);
 
-    // Fast path: minimal exception detection (skip IXC for performance)
+    // Fast path: minimal exception detection (with IXC heuristic)
     if (this.fastPath) {
       if (Number.isNaN(result)) {
         this.fpsr |= 1 << FPSR_IOC;
+      } else if (result !== 0 && Number.isFinite(result)) {
+        // IXC heuristic: non-integer result or integer but not perfect square → inexact
+        if (!Number.isInteger(result) || result * result !== a) {
+          this.fpsr |= 1 << FPSR_IXC;
+        }
       }
-      // Skip IXC check in fast path for performance
       return result;
     }
 
