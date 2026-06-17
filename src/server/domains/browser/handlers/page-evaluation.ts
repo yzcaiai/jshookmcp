@@ -12,6 +12,7 @@ import {
 import { applyEvaluationPostFilters } from '@server/domains/browser/handlers/evaluation-utils';
 import { R } from '@server/domains/shared/ResponseBuilder';
 import type { ToolResponse } from '@server/domains/shared/ResponseBuilder';
+import { transformCodeForCamoufox } from '@server/domains/browser/handlers/safe-code-transform';
 
 interface CamoufoxElementLike {
   screenshot(options: { path?: string; type?: 'png' | 'jpeg'; quality?: number }): Promise<Buffer>;
@@ -95,8 +96,12 @@ export class PageEvaluationHandlers {
 
       if (this.deps.getActiveDriver() === 'camoufox') {
         const context = await this.getCamoufoxEvaluationContext(frameOptions);
-        const evaluateExpression = new Function(`return (${code})`) as () => unknown;
-        const result = await context.evaluate(evaluateExpression);
+
+        // SECURITY: Use safe code transformation instead of new Function()
+        // This prevents code injection attacks (CRIT-01)
+        const { evaluateFunction } = transformCodeForCamoufox({ code });
+
+        const result = await context.evaluate(evaluateFunction);
         const processedResult = applyEvaluationPostFilters(result, this.deps.detailedDataManager, {
           autoSummarize,
           maxSize,

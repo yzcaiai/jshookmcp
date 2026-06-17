@@ -8,6 +8,7 @@ import { connectPlaywrightCdpFallback } from '@modules/collector/playwright-cdp-
 import type { ProcessHandlerDeps } from './shared-types';
 import type { ProcessManagementHandlers } from './process-management';
 import { validatePid, requireString } from '../handlers.base.types';
+import { validateExpression, sanitizeErrorMessage } from './expression-validator';
 
 const INJECTION_TOOLS_DISABLED_ERROR =
   'Injection tools are disabled by configuration. Set ENABLE_INJECTION_TOOLS=true before starting the server to ' +
@@ -160,8 +161,16 @@ export class InjectionHandlers {
     try {
       const pid = validatePid(args.pid);
       const dllPath = requireString(args.dllPath, 'dllPath');
+      const confirmed = typeof args.confirmed === 'boolean' ? args.confirmed : undefined;
+      const payloadHash = typeof args.payloadHash === 'string' ? args.payloadHash : undefined;
+      const validationMode = typeof args.validationMode === 'string' ? args.validationMode : undefined;
 
-      const result = await this.memoryManager.injectDll(pid, dllPath);
+      const result = await this.memoryManager.injectDll(pid, dllPath, {
+        confirmed,
+        payloadHash,
+        validationMode,
+      });
+
       this.processMgmt.recordMemoryAudit({
         operation: 'inject_dll',
         pid,
@@ -228,9 +237,15 @@ export class InjectionHandlers {
       const pid = validatePid(args.pid);
       const shellcode = requireString(args.shellcode, 'shellcode');
       const encoding = (args.encoding as 'hex' | 'base64') || 'hex';
+      const confirmed = typeof args.confirmed === 'boolean' ? args.confirmed : undefined;
+      const validationMode = typeof args.validationMode === 'string' ? args.validationMode : undefined;
       const size = getShellcodeSize(shellcode, encoding);
 
-      const result = await this.memoryManager.injectShellcode(pid, shellcode, encoding);
+      const result = await this.memoryManager.injectShellcode(pid, shellcode, encoding, {
+        confirmed,
+        validationMode,
+      });
+
       this.processMgmt.recordMemoryAudit({
         operation: 'inject_shellcode',
         pid,
@@ -409,6 +424,27 @@ export class InjectionHandlers {
         };
       }
 
+      // Security validation: block dangerous expressions before execution
+      const validation = validateExpression(evaluateExpr);
+      if (!validation.valid) {
+        logger.warn(`electron_attach: blocked expression - ${validation.error}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: validation.error,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
       const target = filtered[0];
       if (!target?.webSocketDebuggerUrl) {
         return {
@@ -436,10 +472,15 @@ export class InjectionHandlers {
         const pages = await browser.pages();
         const matchedPage = pages.find((p) => p.url().includes(target.url)) ?? pages[0];
         if (!matchedPage) throw new Error('Could not get page from connected browser');
+
+        // Use page.evaluate directly without Function constructor
+        // The validated expression is executed in the page's JavaScript context via CDP
         const evaluated = await matchedPage.evaluate((expression: string) => {
           try {
-            const fn = new Function('return (' + expression + ')');
-            return { ok: true as const, result: fn() };
+            // Use indirect eval to execute in global scope
+            // This avoids Function constructor but still executes the expression
+            const result = (0, eval)(expression);
+            return { ok: true as const, result };
           } catch (e: unknown) {
             const errorLike =
               typeof e === 'object' && e !== null
@@ -457,9 +498,11 @@ export class InjectionHandlers {
         }, evaluateExpr);
 
         if (!evaluated?.ok) {
-          evalError =
+          const rawError =
             `Evaluation failed: ${evaluated?.error?.name || 'Error'}: ` +
             `${evaluated?.error?.message || 'Unknown error'}`;
+          // Sanitize error message to prevent information disclosure
+          evalError = sanitizeErrorMessage(rawError);
         } else {
           evalResult = evaluated.result;
         }

@@ -155,12 +155,12 @@ describe('MemoryManager', () => {
 
     it('injectDll', async () => {
       await manager.injectDll(1234, '/path/to/dll');
-      expect(memoryImpl.injectDll).toHaveBeenCalledWith('win32', 1234, '/path/to/dll');
+      expect(memoryImpl.injectDll).toHaveBeenCalledWith('win32', 1234, '/path/to/dll', undefined);
     });
 
     it('injectShellcode', async () => {
       await manager.injectShellcode(1234, '9090', 'hex');
-      expect(memoryImpl.injectShellcode).toHaveBeenCalledWith('win32', 1234, '9090', 'hex');
+      expect(memoryImpl.injectShellcode).toHaveBeenCalledWith('win32', 1234, '9090', 'hex', undefined);
     });
 
     it('checkDebugPort', async () => {

@@ -7,6 +7,34 @@ import { tool } from '@server/registry/tool-builder';
  */
 
 export const processToolDefinitions: Tool[] = [
+  // Core process management
+  tool('process_find', (t) =>
+    t
+      .desc(
+        'Search for processes by name pattern. Returns a list of matching processes with PID, name, path, and window information.',
+      )
+      .string('pattern', 'Process name pattern to search for (supports partial matches)')
+      .required('pattern'),
+  ),
+  tool('process_list', (t) =>
+    t.desc(
+      'List all running processes. This is an alias for process_find with an empty pattern.',
+    ),
+  ),
+  tool('process_get', (t) =>
+    t
+      .desc(
+        'Get detailed information about a specific process by PID, including command line, parent PID, and debug port status.',
+      )
+      .number('pid', 'Process ID to retrieve details for')
+      .required('pid'),
+  ),
+  tool('process_kill', (t) =>
+    t
+      .desc('Terminate a process by PID. Requires appropriate privileges.')
+      .number('pid', 'Process ID to terminate')
+      .required('pid'),
+  ),
   tool('process_windows', (t) =>
     t
       .desc('Get all window handles for a process.')
@@ -145,17 +173,22 @@ export const processToolDefinitions: Tool[] = [
   // Injection tools
   tool('inject_dll', (t) =>
     t
-      .desc('Inject a DLL into a target process.')
+      .desc('Inject a DLL into a target process. Requires elevated privileges and ENABLE_INJECTION_TOOLS=true. Target process and payload are validated before injection.')
       .number('pid', 'Target process ID')
       .string('dllPath', 'Full path to the DLL file to inject')
+      .boolean('confirmed', 'Bypass confirmation prompts (use with caution)', { default: false })
+      .string('payloadHash', 'Expected SHA-256 hash of the DLL for integrity verification (optional)')
+      .enum('validationMode', ['strict', 'balanced', 'permissive', 'disabled'], 'Validation mode override (default: from JSHOOK_INJECTION_VALIDATION_MODE env var)')
       .required('pid', 'dllPath'),
   ),
   tool('inject_shellcode', (t) =>
     t
-      .desc('Allocate and execute raw shellcode in a target process.')
+      .desc('Allocate and execute raw shellcode in a target process. Requires elevated privileges and ENABLE_INJECTION_TOOLS=true. Target process and payload are validated before injection.')
       .number('pid', 'Target process ID')
       .string('shellcode', 'Shellcode bytes (hex string or base64)')
       .enum('encoding', ['hex', 'base64'], 'Encoding of shellcode', { default: 'hex' })
+      .boolean('confirmed', 'Bypass confirmation prompts (use with caution)', { default: false })
+      .enum('validationMode', ['strict', 'balanced', 'permissive', 'disabled'], 'Validation mode override (default: from JSHOOK_INJECTION_VALIDATION_MODE env var)')
       .required('pid', 'shellcode'),
   ),
 

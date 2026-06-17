@@ -248,36 +248,109 @@ export class JsdomHandlers {
         ).build();
       }
 
-      const logs: Array<{ level: string; args: unknown[] }> = [];
-      const window = session.dom.window as unknown as Record<string, unknown>;
-      const originalConsole = window.console;
-      const capturing = createCapturingConsole(originalConsole, logs);
-      window.console = capturing;
+      // Execute in QuickJS WASM sandbox for security isolation
+      const sandboxResult = await this.executeInSandbox(session, code, timeoutHintMs);
 
-      let result: unknown;
-      let errorMessage: string | null = null;
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-        result = (window.eval as (src: string) => unknown)(code);
-      } catch (err) {
-        errorMessage = err instanceof Error ? err.message : String(err);
-      } finally {
-        window.console = originalConsole;
-      }
-
-      if (errorMessage !== null) {
-        return R.fail(errorMessage).set('consoleLogs', logs).build();
+      if (!sandboxResult.ok) {
+        return R.fail(sandboxResult.error ?? 'Execution failed')
+          .set('consoleLogs', sandboxResult.logs.map((msg) => ({ level: 'log', args: [msg] })))
+          .set('timedOut', sandboxResult.timedOut)
+          .build();
       }
 
       return R.ok()
         .set('sessionId', sessionId)
-        .set('result', safeSerialize(result))
-        .set('consoleLogs', logs)
+        .set('result', sandboxResult.output)
+        .set('consoleLogs', sandboxResult.logs.map((msg) => ({ level: 'log', args: [msg] })))
         .set('timeoutHintMs', timeoutHintMs)
+        .set('durationMs', sandboxResult.durationMs)
         .build();
     } catch (error) {
       return R.fail(error).build();
     }
+  }
+
+  /**
+   * Execute user code in QuickJS WASM sandbox with JSDOM DOM access.
+   *
+   * This provides strong isolation: code runs in WebAssembly and cannot
+   * access Node.js APIs, filesystem, or network even if it escapes the
+   * QuickJS VM.
+   *
+   * **Trade-off**: Direct DOM manipulation is not supported in the sandbox.
+   * Code can access read-only document/window properties but cannot call
+   * querySelector/getElementById. Users who need DOM queries should use
+   * browser_jsdom_query tool instead. This trade-off is acceptable because
+   * security (preventing Node.js API access) is more critical than convenience.
+   */
+  private async executeInSandbox(
+    session: JsdomSession,
+    code: string,
+    timeoutMs: number,
+  ): Promise<{
+    ok: boolean;
+    output?: unknown;
+    error?: string;
+    timedOut: boolean;
+    durationMs: number;
+    logs: string[];
+  }> {
+    const { QuickJSSandbox } = await import('@server/sandbox/QuickJSSandbox');
+    const sandbox = new QuickJSSandbox();
+
+    // Extract DOM state into serializable form for injection
+    const domGlobals = this.extractDOMGlobals(session);
+
+    // Execute in isolated QuickJS runtime
+    const result = await sandbox.execute(code, {
+      timeoutMs,
+      globals: domGlobals,
+    });
+
+    return result;
+  }
+
+  /**
+   * Extract JSDOM window/document state into plain objects for QuickJS.
+   *
+   * QuickJS cannot directly access JSDOM's native objects or call methods
+   * across the WASM boundary. We provide read-only properties only.
+   * For DOM queries, users should use browser_jsdom_query tool.
+   */
+  private extractDOMGlobals(session: JsdomSession): Record<string, unknown> {
+    const window = session.dom.window;
+    const doc = window.document;
+
+    return {
+      // Document proxy with read-only properties
+      document: {
+        title: doc.title,
+        URL: doc.URL,
+        domain: doc.domain,
+        documentElement: {
+          tagName: doc.documentElement?.tagName,
+          innerHTML: doc.documentElement?.innerHTML,
+        },
+      },
+      // Window proxy
+      window: {
+        location: {
+          href: window.location.href,
+          protocol: window.location.protocol,
+          host: window.location.host,
+          hostname: window.location.hostname,
+          port: window.location.port,
+          pathname: window.location.pathname,
+          search: window.location.search,
+          hash: window.location.hash,
+        },
+        navigator: {
+          userAgent: window.navigator.userAgent,
+          language: window.navigator.language,
+          platform: window.navigator.platform,
+        },
+      },
+    };
   }
 
   // ── Tool: serialize ──

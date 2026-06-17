@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   executePowerShellScript: vi.fn(),
   execAsync: vi.fn(),
+  mockValidator: {
+    validateTargetProcess: vi.fn(),
+    validateDllPayload: vi.fn(),
+    validateShellcodePayload: vi.fn(),
+    requireConfirmation: vi.fn(),
+  },
 }));
 
 vi.mock('@src/modules/process/memory/types', () => ({
@@ -19,11 +25,52 @@ vi.mock('@src/utils/logger', () => ({
   },
 }));
 
+// Mock the validator to allow all operations in tests
+vi.mock('@modules/process/memory/injection-validator', () => ({
+  createValidatorFromEnv: vi.fn(() => state.mockValidator),
+  InjectionValidator: vi.fn(() => state.mockValidator),
+  InjectionValidationMode: {
+    STRICT: 'strict',
+    BALANCED: 'balanced',
+    PERMISSIVE: 'permissive',
+    DISABLED: 'disabled',
+  },
+}));
+
 import { injectDll, injectShellcode } from '@modules/process/memory/injector';
 
 describe('memory/injector', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Setup default validator responses (passing validation)
+    state.mockValidator.validateTargetProcess.mockResolvedValue({
+      valid: true,
+      processExists: true,
+      processAccessible: true,
+      isCriticalSystemProcess: false,
+      warnings: [],
+      errors: [],
+    });
+
+    state.mockValidator.validateDllPayload.mockResolvedValue({
+      valid: true,
+      payloadType: 'dll',
+      warnings: [],
+      errors: [],
+    });
+
+    state.mockValidator.validateShellcodePayload.mockResolvedValue({
+      valid: true,
+      payloadType: 'shellcode',
+      encodingValid: true,
+      warnings: [],
+      errors: [],
+    });
+
+    state.mockValidator.requireConfirmation.mockReturnValue({
+      required: false,
+    });
   });
 
   it('injectDll rejects unknown platform', async () => {

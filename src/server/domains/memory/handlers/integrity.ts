@@ -26,8 +26,14 @@ export class IntegrityHandlers {
 
   async handleSpeedhackApply(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.speedhackEngine) {
+        throw new Error(
+          'Speedhack tools (memory_speedhack) are only supported on Windows. ' +
+            'This tool requires Win32 timer manipulation APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const result = await this.speedhackEngine!.apply(pid, args.speed as number);
+      const result = await this.speedhackEngine.apply(pid, args.speed as number);
       return {
         ...result,
         hint: `Speedhack active (${args.speed}x). Use memory_speedhack({ action: 'set' }) to adjust.`,
@@ -37,9 +43,15 @@ export class IntegrityHandlers {
 
   async handleSpeedhackSet(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.speedhackEngine) {
+        throw new Error(
+          'Speedhack tools (memory_speedhack) are only supported on Windows. ' +
+            'This tool requires Win32 timer manipulation APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
       return {
-        updated: await this.speedhackEngine!.setSpeed(pid, args.speed as number),
+        updated: await this.speedhackEngine.setSpeed(pid, args.speed as number),
         newSpeed: args.speed,
       };
     });
@@ -47,8 +59,14 @@ export class IntegrityHandlers {
 
   async handleHeapEnumerate(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.heapAnalyzer) {
+        throw new Error(
+          'Heap analysis tools (memory_heap_*) are only supported on Windows. ' +
+            'This tool requires Win32 Toolhelp32 heap enumeration APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const result = await this.heapAnalyzer!.enumerateHeaps(pid);
+      const result = await this.heapAnalyzer.enumerateHeaps(pid);
       return {
         ...result,
         hint: `Enumerated ${result.heaps.length} heaps. Use memory_heap_stats for statistics or memory_heap_anomalies to check for issues.`,
@@ -58,15 +76,27 @@ export class IntegrityHandlers {
 
   async handleHeapStats(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.heapAnalyzer) {
+        throw new Error(
+          'Heap analysis tools (memory_heap_*) are only supported on Windows. ' +
+            'This tool requires Win32 Toolhelp32 heap enumeration APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      return { ...(await this.heapAnalyzer!.getStats(pid)) };
+      return { ...(await this.heapAnalyzer.getStats(pid)) };
     });
   }
 
   async handleHeapAnomalies(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.heapAnalyzer) {
+        throw new Error(
+          'Heap analysis tools (memory_heap_*) are only supported on Windows. ' +
+            'This tool requires Win32 Toolhelp32 heap enumeration APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const anomalies = await this.heapAnalyzer!.detectAnomalies(pid);
+      const anomalies = await this.heapAnalyzer.detectAnomalies(pid);
       return {
         anomalies,
         count: anomalies.length,
@@ -80,22 +110,34 @@ export class IntegrityHandlers {
 
   async handlePEHeaders(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.peAnalyzer) {
+        throw new Error(
+          'PE analysis tools (memory_pe_*) are only supported on Windows. ' +
+            'This tool requires Win32 PE format introspection.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      return { ...(await this.peAnalyzer!.parseHeaders(pid, args.moduleBase as string)) };
+      return { ...(await this.peAnalyzer.parseHeaders(pid, args.moduleBase as string)) };
     });
   }
 
   async handlePEImportsExports(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.peAnalyzer) {
+        throw new Error(
+          'PE analysis tools (memory_pe_*) are only supported on Windows. ' +
+            'This tool requires Win32 PE format introspection.',
+        );
+      }
       const table = (args.table as string) || 'both';
       const base = args.moduleBase as string;
       const pid = await this.resolvePid(args.pid);
       const result: Record<string, unknown> = {};
       if (table === 'imports' || table === 'both') {
-        result.imports = await this.peAnalyzer!.parseImports(pid, base);
+        result.imports = await this.peAnalyzer.parseImports(pid, base);
       }
       if (table === 'exports' || table === 'both') {
-        result.exports = await this.peAnalyzer!.parseExports(pid, base);
+        result.exports = await this.peAnalyzer.parseExports(pid, base);
       }
       return result;
     });
@@ -103,8 +145,14 @@ export class IntegrityHandlers {
 
   async handleInlineHookDetect(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.peAnalyzer) {
+        throw new Error(
+          'Inline hook detection (memory_inline_hook_detect) is only supported on Windows. ' +
+            'This tool requires Win32 PE format introspection.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const hooks = await this.peAnalyzer!.detectInlineHooks(
+      const hooks = await this.peAnalyzer.detectInlineHooks(
         pid,
         args.moduleName as string | undefined,
       );
@@ -121,8 +169,14 @@ export class IntegrityHandlers {
 
   async handleAntiCheatDetect(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.antiCheatDetector) {
+        throw new Error(
+          'Anti-cheat detection tools (memory_anticheat_*, memory_guard_pages, memory_integrity_check) are only supported on Windows. ' +
+            'These tools require Win32 process introspection APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const detections = await this.antiCheatDetector!.detect(pid);
+      const detections = await this.antiCheatDetector.detect(pid);
       return {
         detections,
         count: detections.length,
@@ -136,8 +190,14 @@ export class IntegrityHandlers {
 
   async handleGuardPages(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.antiCheatDetector) {
+        throw new Error(
+          'Anti-cheat detection tools (memory_anticheat_*, memory_guard_pages, memory_integrity_check) are only supported on Windows. ' +
+            'These tools require Win32 process introspection APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const result = await this.antiCheatDetector!.scanGuardPages(pid);
+      const result = await this.antiCheatDetector.scanGuardPages(pid);
       const { guardPages, stats } = result;
       return {
         guardPages,
@@ -154,8 +214,14 @@ export class IntegrityHandlers {
 
   async handleIntegrityCheck(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.antiCheatDetector) {
+        throw new Error(
+          'Anti-cheat detection tools (memory_anticheat_*, memory_guard_pages, memory_integrity_check) are only supported on Windows. ' +
+            'These tools require Win32 process introspection APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const result = await this.antiCheatDetector!.scanIntegrity(
+      const result = await this.antiCheatDetector.scanIntegrity(
         pid,
         args.moduleName as string | undefined,
       );

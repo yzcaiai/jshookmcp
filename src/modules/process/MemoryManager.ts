@@ -165,8 +165,9 @@ export class MemoryManager {
   async injectDll(
     pid: number,
     dllPath: string,
-  ): Promise<{ success: boolean; remoteThreadId?: number; error?: string }> {
-    return injectDllImpl(this.platform, pid, dllPath);
+    options?: { confirmed?: boolean; payloadHash?: string; validationMode?: string },
+  ): Promise<{ success: boolean; remoteThreadId?: number; error?: string; confirmationRequired?: boolean; validationFailed?: boolean }> {
+    return injectDllImpl(this.platform, pid, dllPath, options);
   }
 
   /**
@@ -177,8 +178,9 @@ export class MemoryManager {
     pid: number,
     shellcode: string,
     encoding: 'hex' | 'base64' = 'hex',
-  ): Promise<{ success: boolean; remoteThreadId?: number; error?: string }> {
-    return injectShellcodeImpl(this.platform, pid, shellcode, encoding);
+    options?: { confirmed?: boolean; validationMode?: string },
+  ): Promise<{ success: boolean; remoteThreadId?: number; error?: string; confirmationRequired?: boolean; validationFailed?: boolean }> {
+    return injectShellcodeImpl(this.platform, pid, shellcode, encoding, options);
   }
 
   // ── Anti-Detection ──

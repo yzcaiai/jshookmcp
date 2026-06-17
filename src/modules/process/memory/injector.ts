@@ -8,12 +8,42 @@ import { join } from 'node:path';
 import { logger } from '@utils/logger';
 import { MEMORY_INJECT_TIMEOUT_MS } from '@src/constants';
 import { executePowerShellScript, execAsync, type Platform } from '@modules/process/memory/types';
+import {
+  createValidatorFromEnv,
+  InjectionValidator,
+  InjectionValidationMode,
+  type InjectionValidatorConfig,
+} from './injection-validator';
 
 // Reject paths containing shell metacharacters to prevent command injection.
 function validatePath(p: string): void {
   if (/[`$"';|<>&()\\\n\r]/.test(p)) {
     throw new Error(`Path contains unsafe characters: ${p}`);
   }
+}
+
+// Shared validator instance (lazy-initialized)
+let _validator: InjectionValidator | null = null;
+function getValidator(modeOverride?: string): InjectionValidator {
+  if (modeOverride) {
+    // Create a new validator with the override mode
+    const mode = Object.values(InjectionValidationMode).includes(modeOverride as InjectionValidationMode)
+      ? (modeOverride as InjectionValidationMode)
+      : InjectionValidationMode.BALANCED;
+
+    const config: InjectionValidatorConfig = {
+      mode,
+      maxShellcodeSize: 1024 * 1024,
+      requireHashForDll: mode === InjectionValidationMode.STRICT,
+    };
+
+    return new InjectionValidator(config);
+  }
+
+  if (!_validator) {
+    _validator = createValidatorFromEnv();
+  }
+  return _validator;
 }
 
 // ── DLL Injection ──
@@ -124,7 +154,65 @@ export async function injectDll(
   platform: Platform,
   pid: number,
   dllPath: string,
-): Promise<{ success: boolean; remoteThreadId?: number; error?: string }> {
+  options?: { confirmed?: boolean; payloadHash?: string; validationMode?: string },
+): Promise<{ success: boolean; remoteThreadId?: number; error?: string; confirmationRequired?: boolean; validationFailed?: boolean }> {
+  // Validation phase
+  const validator = getValidator(options?.validationMode);
+
+  // Skip validation if confirmed flag is set or validation is disabled
+  if (!options?.confirmed) {
+    try {
+      // Validate target process
+      const targetValidation = await validator.validateTargetProcess(pid);
+      if (!targetValidation.valid) {
+        return {
+          success: false,
+          error: targetValidation.errors.join('; '),
+          validationFailed: true,
+        };
+      }
+
+      // Validate DLL payload
+      const payloadValidation = await validator.validateDllPayload(dllPath, {
+        expectedHash: options?.payloadHash,
+      });
+      if (!payloadValidation.valid) {
+        return {
+          success: false,
+          error: payloadValidation.errors.join('; '),
+          validationFailed: true,
+        };
+      }
+
+      // Check if confirmation is required
+      const confirmationReq = validator.requireConfirmation(targetValidation, payloadValidation);
+      if (confirmationReq.required) {
+        return {
+          success: false,
+          error: confirmationReq.reason || 'Confirmation required',
+          confirmationRequired: true,
+          validationFailed: true,
+        };
+      }
+
+      // Log warnings (non-blocking)
+      if (targetValidation.warnings.length > 0) {
+        logger.warn(`DLL injection warnings (target): ${targetValidation.warnings.join('; ')}`);
+      }
+      if (payloadValidation.warnings.length > 0) {
+        logger.warn(`DLL injection warnings (payload): ${payloadValidation.warnings.join('; ')}`);
+      }
+    } catch (validationError) {
+      logger.error('Validation error during DLL injection:', validationError);
+      return {
+        success: false,
+        error: `Validation error: ${validationError instanceof Error ? validationError.message : String(validationError)}`,
+        validationFailed: true,
+      };
+    }
+  }
+
+  // Injection phase (unchanged from original)
   if (platform === 'linux') {
     try {
       validatePath(dllPath);
@@ -282,7 +370,63 @@ export async function injectShellcode(
   pid: number,
   shellcode: string,
   encoding: 'hex' | 'base64' = 'hex',
-): Promise<{ success: boolean; remoteThreadId?: number; error?: string }> {
+  options?: { confirmed?: boolean; validationMode?: string },
+): Promise<{ success: boolean; remoteThreadId?: number; error?: string; confirmationRequired?: boolean; validationFailed?: boolean }> {
+  // Validation phase
+  const validator = getValidator(options?.validationMode);
+
+  // Skip validation if confirmed flag is set or validation is disabled
+  if (!options?.confirmed) {
+    try {
+      // Validate target process
+      const targetValidation = await validator.validateTargetProcess(pid);
+      if (!targetValidation.valid) {
+        return {
+          success: false,
+          error: targetValidation.errors.join('; '),
+          validationFailed: true,
+        };
+      }
+
+      // Validate shellcode payload
+      const payloadValidation = await validator.validateShellcodePayload(shellcode, encoding);
+      if (!payloadValidation.valid) {
+        return {
+          success: false,
+          error: payloadValidation.errors.join('; '),
+          validationFailed: true,
+        };
+      }
+
+      // Check if confirmation is required
+      const confirmationReq = validator.requireConfirmation(targetValidation, payloadValidation);
+      if (confirmationReq.required) {
+        return {
+          success: false,
+          error: confirmationReq.reason || 'Confirmation required',
+          confirmationRequired: true,
+          validationFailed: true,
+        };
+      }
+
+      // Log warnings (non-blocking)
+      if (targetValidation.warnings.length > 0) {
+        logger.warn(`Shellcode injection warnings (target): ${targetValidation.warnings.join('; ')}`);
+      }
+      if (payloadValidation.warnings.length > 0) {
+        logger.warn(`Shellcode injection warnings (payload): ${payloadValidation.warnings.join('; ')}`);
+      }
+    } catch (validationError) {
+      logger.error('Validation error during shellcode injection:', validationError);
+      return {
+        success: false,
+        error: `Validation error: ${validationError instanceof Error ? validationError.message : String(validationError)}`,
+        validationFailed: true,
+      };
+    }
+  }
+
+  // Injection phase (unchanged from original)
   try {
     let shellcodeBytes: Buffer;
     if (encoding === 'base64') {

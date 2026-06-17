@@ -23,8 +23,14 @@ export class HookHandlers {
 
   async handleBreakpointSet(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.bpEngine) {
+        throw new Error(
+          'Hardware breakpoint tools (memory_breakpoint) are only supported on Windows. ' +
+            'This tool requires Win32 debug register APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const config = await this.bpEngine!.setBreakpoint(
+      const config = await this.bpEngine.setBreakpoint(
         pid,
         args.address as string,
         args.access as BreakpointAccess,
@@ -38,22 +44,42 @@ export class HookHandlers {
   }
 
   async handleBreakpointRemove(args: Record<string, unknown>) {
-    return handleSafe(async () => ({
-      removed: await this.bpEngine!.removeBreakpoint(args.breakpointId as string),
-    }));
+    return handleSafe(async () => {
+      if (!this.bpEngine) {
+        throw new Error(
+          'Hardware breakpoint tools (memory_breakpoint) are only supported on Windows. ' +
+            'This tool requires Win32 debug register APIs.',
+        );
+      }
+      return {
+        removed: await this.bpEngine.removeBreakpoint(args.breakpointId as string),
+      };
+    });
   }
 
   async handleBreakpointList(_args: Record<string, unknown>) {
     return handleSafe(async () => {
-      const bps = this.bpEngine!.listBreakpoints();
+      if (!this.bpEngine) {
+        throw new Error(
+          'Hardware breakpoint tools (memory_breakpoint) are only supported on Windows. ' +
+            'This tool requires Win32 debug register APIs.',
+        );
+      }
+      const bps = this.bpEngine.listBreakpoints();
       return { breakpoints: bps, count: bps.length };
     });
   }
 
   async handleBreakpointTrace(args: Record<string, unknown>) {
     return handleSafe(async () => {
+      if (!this.bpEngine) {
+        throw new Error(
+          'Hardware breakpoint tools (memory_breakpoint) are only supported on Windows. ' +
+            'This tool requires Win32 debug register APIs.',
+        );
+      }
       const pid = await this.resolvePid(args.pid);
-      const hits = await this.bpEngine!.traceAccess(
+      const hits = await this.bpEngine.traceAccess(
         pid,
         args.address as string,
         args.access as BreakpointAccess,
