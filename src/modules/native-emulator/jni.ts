@@ -244,6 +244,42 @@ export class JniEnvironment {
     return handle;
   }
 
+  /**
+   * Release all JNI resources: object handles (jclass/jstring/jbyteArray),
+   * class registry, method/field registrations, native bindings, and
+   * GetByteArrayElements tracking.
+   *
+   * Idempotent: safe to call multiple times. Follows the disposal pattern for
+   * emulator-backed JNI environments, ensuring no handle leaks accumulate across
+   * repeated session create/destroy cycles.
+   */
+  dispose(): void {
+    // Clear handle table (releases all jclass/jstring/jbyteArray/jmethodID/jfieldID)
+    this.handles.clear();
+    this.handleBump = HANDLE_BASE;
+
+    // Clear class registry
+    this.classes.clear();
+    this.classByHandle.clear();
+
+    // Clear native method bindings
+    this.natives.clear();
+
+    // Clear GetByteArrayElements tracking
+    this.arrayElements.clear();
+
+    // Clear mock Java methods and fields
+    this.javaMethods.clear();
+    this.javaFields.clear();
+
+    // Reset stub allocators
+    this.stubBump = STUB_BASE;
+    this.vmStubBump = VM_STUB_BASE;
+
+    // Clear pending exception
+    this.pendingException = 0;
+  }
+
   // ── JNINativeInterface table construction ──
 
   private installEnvTable(): void {

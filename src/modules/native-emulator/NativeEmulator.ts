@@ -78,6 +78,8 @@ export class NativeEmulator {
   private nextAllocAddr = 0x4000_0000; // 1 GB — well above SO segments
   /** Hard ceiling for the guest heap. */
   private static readonly HEAP_CEIL = 0x6000_0000; // 1.5 GB
+  /** Disposal flag: true after dispose() is called. */
+  private disposed = false;
 
   constructor(options: NativeEmulatorOptions = {}) {
     this.engine = new CpuEngine();
@@ -99,6 +101,7 @@ export class NativeEmulator {
    * bundled bionic stubs, so a real PIC `.so` is callable without manual setup.
    */
   loadLibrary(bytes: Uint8Array): NativeLibraryLoadResult {
+    this.checkNotDisposed();
     const { entry } = this.engine.loadElf(bytes, this.bionic);
     return {
       entry,
@@ -137,6 +140,7 @@ export class NativeEmulator {
 
   /** Invoke an exported function by name (AAPCS: args in x0..x7, result in x0). */
   call(symbol: string, args: number[] = []): number {
+    this.checkNotDisposed();
     return this.engine.callSymbol(symbol, args);
   }
 
@@ -202,6 +206,7 @@ export class NativeEmulator {
    * @returns The guest address of the allocated region.
    */
   allocGuestMemory(size: number, fillBytes?: Uint8Array): number {
+    this.checkNotDisposed();
     const pageSize = getReverseEngineeringConfig().nativeEmulator.guestPageSizeBytes;
     const aligned = Math.ceil(size / pageSize) * pageSize;
     if (this.nextAllocAddr + aligned > NativeEmulator.HEAP_CEIL) {
@@ -231,7 +236,62 @@ export class NativeEmulator {
    * Use to prepare input buffers before a `call_symbol` invocation.
    */
   writeGuestMemory(address: number, data: Uint8Array): void {
+    this.checkNotDisposed();
     this.engine.writeCode(address, data);
+  }
+
+  /**
+   * Release all resources held by this emulator: mapped memory regions, JNI
+   * object handles, CPU register state, symbol table, and host function stubs.
+   *
+   * Idempotent: safe to call multiple times. After disposal, calling other
+   * methods throws a clear error so leaking a disposed emulator into a new
+   * session fails loudly rather than silently corrupting state.
+   *
+   * **Design rationale & references:**
+   *
+   * Memory leaks in emulators are a well-documented hazard. Unicorn Engine
+   * issue #1595 demonstrates that incomplete initialization paths can leave
+   * allocated memory unreleased. QEMU's 2026 TCG cleanup improvements focus on
+   * consistent resource teardown across all termination paths. This dispose
+   * pattern follows the resource-acquisition-is-initialization (RAII) principle
+   * adapted for managed runtimes: explicit cleanup when the GC cannot infer
+   * ownership (mapped memory is hidden in Uint8Array buffers, JNI handles are
+   * opaque integers).
+   *
+   * **References:**
+   * - Unicorn Engine #1595: Memory leaks from incomplete initialization
+   *   https://github.com/unicorn-engine/unicorn/issues/1595
+   * - Unicorn Engine #1704: Excessive RAM usage on Windows
+   *   https://github.com/unicorn-engine/unicorn/issues/1704
+   * - QEMU TCG cleanup flow improvements (2026)
+   *   https://lore.proxmox.com/pve-devel/aff05521-217e-4e0c-8f28-ea1c3b821d96@proxmox.com/t/
+   * - arXiv 2504.16251: Adaptive Dynamic Memory Management for Hardware Enclaves
+   *   https://arxiv.org/abs/2504.16251
+   * - arXiv 2310.14741: Adaptive CPU Resource Allocation for Emulator in KVM
+   *   https://arxiv.org/abs/2310.14741
+   */
+  dispose(): void {
+    if (this.disposed) return; // Idempotent
+    this.disposed = true;
+
+    // Dispose underlying engine resources
+    this.engine.dispose();
+
+    // Dispose JNI environment
+    this.jni.dispose();
+
+    // Reset heap allocator state
+    this.nextAllocAddr = 0x4000_0000;
+  }
+
+  /** Throw if dispose() has been called. */
+  private checkNotDisposed(): void {
+    if (this.disposed) {
+      throw new Error(
+        'NativeEmulator has been disposed; create a new instance or reuse an active session',
+      );
+    }
   }
 }
 

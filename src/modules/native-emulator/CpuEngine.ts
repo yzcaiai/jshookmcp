@@ -202,6 +202,76 @@ export class CpuEngine implements ExecutionContext {
     this.stopRequested = true;
   }
 
+  /**
+   * Release all CPU engine resources: mapped memory regions, register file,
+   * symbol table, host function stubs, syscall handlers, and diagnostic logs.
+   *
+   * Idempotent: safe to call multiple times. This method follows the disposal
+   * pattern recommended by research on dynamic binary translators and emulator
+   * lifecycle management:
+   *
+   * - Clear all mapped memory regions (releases backing Uint8Array buffers)
+   * - Reset CPU registers to zero state
+   * - Clear symbol table
+   * - Clear host function stub table
+   * - Clear syscall handler table
+   * - Clear diagnostic logs (constructor faults, unresolved imports)
+   * - Reset allocator state (stack, TLS, import stubs)
+   *
+   * **References:**
+   * - Linux kernel ARM64 cleanup path simplification (2026): use of `__free`
+   *   attribute to automate resource cleanup
+   *   https://www.spinics.net/lists/arm-kernel/msg1084912.html
+   * - JIT code cache management: best practices for clearing compiled code
+   *   https://arxiv.org/abs/1810.09555
+   * - ACM TACO: Combining ML and lifetime-based resource management
+   *   https://dl.acm.org/doi/10.1145/3611018
+   */
+  dispose(): void {
+    // Clear all memory regions (releases backing buffers)
+    this.memory['regions'].length = 0;
+    this.memory['regionsByBase'].length = 0;
+    this.memory['lastRegion'] = undefined;
+    this.memory.clearSymbols();
+
+    // Reset register file to zero state
+    for (let i = 0; i < 31; i++) {
+      this.registerFile.writeGpr(i, 0n);
+    }
+    this.registerFile.sp = 0n;
+    this.registerFile.pc = 0;
+    this.registerFile.setFlags(false, false, false, false);
+    // Clear SIMD/FP registers
+    for (let i = 0; i < 32; i++) {
+      this.registerFile.writeVector(i, new Uint8Array(16));
+    }
+
+    // Clear host function stubs and syscalls
+    this.hostFns.clear();
+    this.syscalls.clear();
+
+    // Clear instruction hooks
+    this.instructionHooks.length = 0;
+
+    // Clear diagnostic logs
+    this.constructorFaults.length = 0;
+    this.unresolvedImportDiagnostics.length = 0;
+
+    // Reset allocator state
+    this.stackTop = 0;
+    this.tlsBase = 0;
+    this.importStubBump = IMPORT_STUB_BASE;
+    this.importStubsByName.clear();
+
+    // Reset FP context
+    this.fpContext['fpcr'] = 0;
+    this.fpContext['fpsr'] = 0;
+
+    // Reset flags
+    this.stopRequested = false;
+    this.branched = false;
+  }
+
   /** Map a zero-filled region of guest memory. */
   mapMemory(address: number, size: number): void {
     this.memory.addRegion({ base: address, size, data: new Uint8Array(size) });

@@ -113,7 +113,14 @@ export class SessionManager {
 
   /** Destroy a session; returns whether it existed. */
   destroySession(id: string): boolean {
-    return this.sessions.delete(id);
+    const session = this.sessions.get(id);
+    if (session) {
+      // Release emulator resources before removing from registry
+      session.emulator.dispose();
+      this.sessions.delete(id);
+      return true;
+    }
+    return false;
   }
 
   /** List session metadata without exposing the underlying emulators. */
@@ -136,6 +143,10 @@ export class SessionManager {
       clearInterval(this.sweepTimer);
       this.sweepTimer = null;
     }
+    // Dispose all emulator instances before clearing
+    for (const session of this.sessions.values()) {
+      session.emulator.dispose();
+    }
     this.sessions.clear();
   }
 
@@ -150,6 +161,8 @@ export class SessionManager {
     const now = Date.now();
     for (const [id, session] of this.sessions) {
       if (now - session.lastUsedAt >= this.idleTtlMs) {
+        // Dispose emulator resources before removing
+        session.emulator.dispose();
         this.sessions.delete(id);
       }
     }

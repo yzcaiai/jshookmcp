@@ -71,6 +71,43 @@ function queryStringFromUrl(url: string): Array<{ name: string; value: string }>
   }
 }
 
+/**
+ * Normalize CDP protocol identifier to HAR-compatible HTTP version string.
+ * Maps CDP protocol values (h2, h3, http/1.1, etc.) to HAR format (HTTP/2, HTTP/3, HTTP/1.1).
+ *
+ * Protocol mappings:
+ * - http/1.0 → HTTP/1.0
+ * - http/1.1 → HTTP/1.1
+ * - h2, h2c → HTTP/2
+ * - h3, http/2+quic/* → HTTP/3
+ * - unknown/empty → HTTP/1.1 (fallback)
+ */
+function normalizeProtocol(protocol: string | undefined): string {
+  if (!protocol || protocol.trim() === '') {
+    return 'HTTP/1.1';
+  }
+
+  const normalized = protocol.toLowerCase().trim();
+
+  // HTTP/1.x
+  if (normalized === 'http/1.0') return 'HTTP/1.0';
+  if (normalized === 'http/1.1') return 'HTTP/1.1';
+
+  // HTTP/2
+  if (normalized === 'h2' || normalized === 'h2c') return 'HTTP/2';
+
+  // HTTP/3 (includes QUIC variants)
+  if (normalized === 'h3' || normalized.startsWith('http/2+quic')) return 'HTTP/3';
+
+  // Unknown protocols: preserve as-is with uppercase HTTP prefix if it looks like http/X.Y
+  if (normalized.startsWith('http/')) {
+    return protocol.replace(/^http\//i, 'HTTP/');
+  }
+
+  // Complete unknown: fallback to HTTP/1.1
+  return 'HTTP/1.1';
+}
+
 interface RawRequest {
   requestId: string;
   url: string;
@@ -79,6 +116,7 @@ interface RawRequest {
   postData?: string;
   timestamp?: number;
   resourceType?: string;
+  protocol?: string;
 }
 
 interface RawResponse {
@@ -87,6 +125,7 @@ interface RawResponse {
   headers?: Record<string, string>;
   mimeType?: string;
   timing?: { receiveHeadersEnd?: number };
+  protocol?: string;
 }
 
 export interface BuildHarParams {
@@ -164,7 +203,7 @@ export async function buildHar(params: BuildHarParams): Promise<Har> {
       request: {
         method: req.method,
         url: req.url,
-        httpVersion: 'HTTP/1.1',
+        httpVersion: normalizeProtocol(req.protocol),
         headers: headersToHar(req.headers),
         queryString: queryStringFromUrl(req.url),
         cookies: reqCookieHeader ? parseCookies(reqCookieHeader) : [],
@@ -175,7 +214,7 @@ export async function buildHar(params: BuildHarParams): Promise<Har> {
       response: {
         status: res?.status ?? 0,
         statusText: res?.statusText ?? '',
-        httpVersion: 'HTTP/1.1',
+        httpVersion: normalizeProtocol(res?.protocol),
         headers: headersToHar(res?.headers),
         cookies: resCookieHeader ? parseCookies(resCookieHeader) : [],
         content: {
