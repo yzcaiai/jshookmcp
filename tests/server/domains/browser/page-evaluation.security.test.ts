@@ -214,8 +214,8 @@ describe('PageEvaluationHandlers – Security (CRIT-01)', () => {
           evaluate: vi.fn(async (_fn: any) => {
             // Simulate how page.evaluate() works in a real browser:
             // The function is serialized and executed in browser context
-            if (typeof fn === 'function') {
-              }
+            if (typeof _fn === 'function') {
+              return _fn();
             }
             return null;
           }),
