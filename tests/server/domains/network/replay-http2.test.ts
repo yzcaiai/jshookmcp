@@ -13,6 +13,20 @@ vi.mock('node:dns/promises', () => ({
   lookup: (...args: unknown[]) => lookupMock(...args),
 }));
 
+// Prevent real TCP connections to non-routable IPs (192.0.2.10) in HTTP/2 tests.
+// On Linux, TCP SYN retransmit can take ~30s per test.
+vi.mock('node:http2', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:http2')>();
+  return {
+    ...actual,
+    connect: vi.fn(() => {
+      const session = actual.connect('https://localhost:1');
+      process.nextTick(() => session.emit('error', new Error('mocked http2 error')));
+      return session;
+    }),
+  };
+});
+
 // Public IP from TEST-NET-1 (RFC 5737)
 const TEST_PUBLIC_IP = '192.0.2.10';
 
