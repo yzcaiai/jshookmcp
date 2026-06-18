@@ -24,9 +24,12 @@ export class ProcessHandlersCore {
   protected platform: string;
   protected auditTrail = new MemoryAuditTrail();
 
-  constructor() {
-    this.processManager = new UnifiedProcessManager();
-    this.memoryManager = new MemoryManager();
+  constructor(
+    processManager?: UnifiedProcessManager,
+    memoryManager?: MemoryManager,
+  ) {
+    this.processManager = processManager ?? new UnifiedProcessManager();
+    this.memoryManager = memoryManager ?? new MemoryManager();
     this.platform = this.processManager.getPlatform();
     logger.info(`ProcessToolHandlers initialized for platform: ${this.platform}`);
   }
