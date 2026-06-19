@@ -804,6 +804,10 @@ export class PageController {
   async getPage() {
     return await this.collector.getActivePage();
   }
+
+  async getActivePage() {
+    return await this.collector.getActivePage();
+  }
 }
 
 /**
